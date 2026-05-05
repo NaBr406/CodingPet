@@ -1,0 +1,35 @@
+llm:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""
+  vision_model_name: "gpt-4.1-mini"
+  chat_model_name: "gpt-4.1-mini"
+
+image_gen:
+  base_url: "https://api.openai.com/v1"
+  api_key: ""
+  model_name: "gpt-image-1"
+
+pet_preset:
+  appearance_prompt: "Cute nonsexual chibi anime little-girl coding mascot, silver twin tails, blue eyes, oversized white lab coat, pastel cyan hoodie, angle-bracket hair clips, clean anime cel-shading, transparent background"
+  personality_prompt: "A sharp-tongued senior engineer who roasts bad code, spots flaws fast, and still gives useful advice"
+
+observer:
+  enabled: true
+  interval_seconds: 300
+  ide_keywords:
+    - "Code"
+    - "Cursor"
+    - "IDEA"
+    - "PyCharm"
+    - "Visual Studio"
+
+runtime:
+  request_timeout_seconds: 20
+  message_duration_ms: 7000
+  state_reset_ms: 6000
+  random_mood_enabled: true
+  random_mood_min_seconds: 8
+  random_mood_max_seconds: 20
+  sprite_size: 300
+  sprite_min_size: 160
+  sprite_max_size: 560

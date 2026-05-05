@@ -1,0 +1,161 @@
+2026-05-04 19:15:14,947 | WARNING | MainThread | Failed to load asset for state 'idle': D:\githubs\CodingPet\assets\idle.webp
+2026-05-04 19:15:14,981 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-04 19:15:14,982 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-04 19:15:14,982 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-04 19:15:14,983 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-04 19:27:31,285 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-04 19:27:31,286 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-04 19:27:31,286 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-04 19:27:31,289 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-04 19:35:20,190 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-04 19:35:20,190 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-04 19:35:20,190 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-04 19:35:20,191 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-04 19:50:22,895 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-04 19:50:22,895 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-04 19:50:22,895 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-04 19:50:22,896 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-04 22:34:22,725 | INFO | MainThread | Loaded 6 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-04 22:34:22,752 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-04 22:34:22,752 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-04 22:34:22,752 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-04 22:34:22,753 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-05 21:48:35,203 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 21:48:35,226 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-05 21:48:35,226 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-05 21:48:35,227 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-05 21:48:35,227 | INFO | MainThread | Random mood switching enabled.
+2026-05-05 21:48:35,227 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-05 21:48:50,944 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 21:49:03,801 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 21:49:16,075 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 21:49:33,524 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 21:49:44,478 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 21:50:00,982 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 21:50:18,939 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 21:50:27,403 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:50:35,719 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:50:51,957 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:51:06,705 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 21:51:17,118 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 21:51:26,732 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 21:51:40,129 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 21:51:59,485 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 21:52:12,990 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 21:52:30,811 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:52:49,115 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-05 21:53:04,377 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-05 21:53:21,918 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 21:53:39,039 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 21:53:53,086 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 21:54:01,186 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 21:54:18,411 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 21:54:35,900 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:54:45,770 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:54:57,007 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:55:07,931 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 21:55:18,753 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:55:29,902 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-05 21:55:43,973 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:55:59,500 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 21:56:36,281 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 21:56:36,295 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-05 21:56:36,295 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-05 21:56:36,296 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-05 21:56:36,296 | INFO | MainThread | Random mood switching enabled.
+2026-05-05 21:56:36,297 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-05 21:56:50,564 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-05 21:58:29,544 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 21:58:29,563 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-05 21:58:29,563 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-05 21:58:29,564 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-05 21:58:29,564 | INFO | MainThread | Random mood switching enabled.
+2026-05-05 21:58:29,564 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-05 21:58:48,853 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:59:01,557 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 21:59:13,740 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 21:59:26,061 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-05 21:59:45,130 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 21:59:56,515 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:00:12,416 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:00:32,113 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 22:00:41,621 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:00:56,105 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:01:12,119 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 22:01:21,684 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 22:01:40,296 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 22:01:52,212 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:02:04,963 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:02:18,973 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 22:02:37,751 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:02:47,373 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 22:03:06,451 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:03:22,159 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 22:03:33,604 | ERROR | Dummy-1 | Observer cycle failed.
+Traceback (most recent call last):
+  File "d:\githubs\CodingPet\observer_thread.py", line 36, in run
+    self._observe_once()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "d:\githubs\CodingPet\observer_thread.py", line 54, in _observe_once
+    reply = analyze_screenshot(self._config, screenshot_base64, title)
+  File "d:\githubs\CodingPet\llm_client.py", line 49, in analyze_screenshot
+    client = _build_client(
+        base_url=config.llm.base_url,
+        api_key=config.llm.api_key,
+        timeout_seconds=config.runtime.request_timeout_seconds,
+    )
+  File "d:\githubs\CodingPet\llm_client.py", line 123, in _build_client
+    raise ValueError("Missing api_key")
+ValueError: Missing api_key
+2026-05-05 22:03:37,786 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 22:03:54,531 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 22:04:13,052 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:04:31,983 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 22:04:49,772 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:05:04,934 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 22:05:15,929 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 22:05:25,353 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:05:41,332 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 22:05:57,333 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 22:06:09,529 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 22:06:25,604 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:06:45,419 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:07:03,712 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 22:07:15,065 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:07:24,261 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 22:07:44,346 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:07:57,415 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-05 22:08:16,049 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:08:29,553 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 22:08:37,606 | ERROR | Dummy-1 | Observer cycle failed.
+Traceback (most recent call last):
+  File "d:\githubs\CodingPet\observer_thread.py", line 36, in run
+    self._observe_once()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "d:\githubs\CodingPet\observer_thread.py", line 54, in _observe_once
+    reply = analyze_screenshot(self._config, screenshot_base64, title)
+  File "d:\githubs\CodingPet\llm_client.py", line 49, in analyze_screenshot
+    client = _build_client(
+        base_url=config.llm.base_url,
+        api_key=config.llm.api_key,
+        timeout_seconds=config.runtime.request_timeout_seconds,
+    )
+  File "d:\githubs\CodingPet\llm_client.py", line 123, in _build_client
+    raise ValueError("Missing api_key")
+ValueError: Missing api_key
+2026-05-05 22:08:47,643 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-05 22:08:58,935 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:09:15,829 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-05 22:09:33,936 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 22:09:49,402 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:10:06,514 | INFO | MainThread | Loaded 48 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-05 22:10:22,673 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-05 22:10:22,690 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-05 22:10:22,690 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-05 22:10:22,690 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-05 22:10:22,690 | INFO | MainThread | Random mood switching enabled.
+2026-05-05 22:10:22,691 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-05 22:10:34,461 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-05 22:10:48,996 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-05 22:11:08,670 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-05 22:11:18,852 | INFO | MainThread | Loaded 24 animation frames from D:\githubs\CodingPet\assets\sleepy
