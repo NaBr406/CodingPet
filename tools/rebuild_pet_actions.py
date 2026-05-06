@@ -12,7 +12,7 @@ from PIL import Image, ImageChops, ImageFilter
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = PROJECT_DIR / "assets"
 REFERENCE_DIR = ASSETS_DIR / "reference"
-FRAME_COUNT = 24
+FRAME_COUNT = 32
 CANVAS_SIZE = 512
 SOURCE_SIZE = 1024
 
@@ -23,6 +23,8 @@ class MotionProfile:
     x_amplitude: float = 0.0
     scale_amplitude: float = 0.0
     rotation_amplitude: float = 0.0
+    jump_amplitude: float = 0.0
+    shake_amplitude: float = 0.0
     phase: float = 0.0
     squash_amplitude: float = 0.0
     blink_frames: tuple[int, ...] = ()
@@ -63,78 +65,94 @@ SHEET_CELLS = {
 }
 
 MOTION_PROFILES = {
-    "idle": MotionProfile(y_amplitude=5, scale_amplitude=0.012, blink_frames=(10, 11)),
+    "idle": MotionProfile(
+        y_amplitude=4,
+        scale_amplitude=0.008,
+        squash_amplitude=0.006,
+        blink_frames=(18, 19),
+    ),
     "thinking": MotionProfile(
-        y_amplitude=3,
-        x_amplitude=2,
+        y_amplitude=4,
+        x_amplitude=1.5,
+        scale_amplitude=0.006,
         rotation_amplitude=1.2,
         phase=0.2,
         idea_pop=True,
-        blink_frames=(14,),
+        blink_frames=(20,),
     ),
     "angry": MotionProfile(
-        y_amplitude=6,
-        x_amplitude=2,
+        y_amplitude=4,
+        x_amplitude=2.5,
         scale_amplitude=0.01,
-        rotation_amplitude=2.4,
+        rotation_amplitude=2.8,
+        shake_amplitude=4.0,
         phase=0.5,
         anger_marks=True,
     ),
     "happy": MotionProfile(
-        y_amplitude=10,
-        scale_amplitude=0.035,
-        rotation_amplitude=3.0,
+        y_amplitude=5,
+        scale_amplitude=0.02,
+        rotation_amplitude=2.2,
+        jump_amplitude=20,
         phase=0.1,
+        squash_amplitude=0.018,
         reaction_burst=True,
         proud_sparkles=True,
-        blink_frames=(3, 4),
+        blink_frames=(5, 6),
     ),
     "coding": MotionProfile(
-        y_amplitude=3,
-        x_amplitude=1,
-        scale_amplitude=0.006,
+        y_amplitude=2,
+        x_amplitude=0.8,
+        scale_amplitude=0.004,
+        rotation_amplitude=0.8,
         phase=0.35,
         typing_ticks=True,
-        blink_frames=(16,),
+        blink_frames=(23,),
     ),
     "sleepy": MotionProfile(
-        y_amplitude=4,
-        x_amplitude=1,
-        scale_amplitude=0.015,
+        y_amplitude=6,
+        x_amplitude=1.2,
+        scale_amplitude=0.012,
+        rotation_amplitude=1.4,
         phase=0.75,
+        squash_amplitude=0.01,
         sleep_bubble=True,
-        blink_frames=(0, 1, 2, 3, 4, 5, 6, 7),
+        blink_frames=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
     ),
     "confused": MotionProfile(
-        y_amplitude=5,
-        x_amplitude=3,
-        rotation_amplitude=3.4,
+        y_amplitude=4,
+        x_amplitude=4,
+        scale_amplitude=0.006,
+        rotation_amplitude=4.2,
         phase=0.15,
         idea_pop=True,
         sweat_drop=True,
     ),
     "surprised": MotionProfile(
-        y_amplitude=8,
-        scale_amplitude=0.04,
-        rotation_amplitude=1.8,
+        y_amplitude=4,
+        scale_amplitude=0.052,
+        rotation_amplitude=1.2,
+        jump_amplitude=14,
         phase=0.42,
         reaction_burst=True,
     ),
     "proud": MotionProfile(
         y_amplitude=4,
-        scale_amplitude=0.014,
-        rotation_amplitude=1.2,
+        scale_amplitude=0.012,
+        rotation_amplitude=1.6,
         phase=0.1,
+        squash_amplitude=0.006,
         proud_sparkles=True,
-        blink_frames=(8, 9, 10),
+        blink_frames=(10, 11, 12),
     ),
     "bored": MotionProfile(
         y_amplitude=3,
-        x_amplitude=2,
-        rotation_amplitude=1.6,
+        x_amplitude=2.5,
+        rotation_amplitude=2.0,
         phase=0.6,
+        squash_amplitude=0.008,
         bored_puff=True,
-        blink_frames=(0, 1, 2, 3, 4, 5),
+        blink_frames=(0, 1, 2, 3, 4, 5, 6, 7),
     ),
 }
 
@@ -352,8 +370,16 @@ def build_motion_frame(source: Image.Image, profile: MotionProfile, index: int) 
     t = (index / FRAME_COUNT + profile.phase) % 1.0
     wave = math.sin(t * math.tau)
     bounce = math.sin(t * math.tau * 2)
+    jump = max(0.0, math.sin(t * math.tau))
     y_offset = round(profile.y_amplitude * wave)
     x_offset = round(profile.x_amplitude * math.sin(t * math.tau + math.pi / 2))
+    if profile.jump_amplitude:
+        y_offset -= round(profile.jump_amplitude * jump)
+        if jump < 0.18:
+            y_offset += round(3 * (0.18 - jump) / 0.18)
+    if profile.shake_amplitude:
+        x_offset += round(profile.shake_amplitude * (-1 if index % 2 else 1))
+        y_offset += round((profile.shake_amplitude * 0.35) * math.sin(index * math.tau * 0.5))
     scale = 1.0 + profile.scale_amplitude * max(0.0, bounce)
     rotation = profile.rotation_amplitude * math.sin(t * math.tau)
 
@@ -391,8 +417,18 @@ def build_motion_frame(source: Image.Image, profile: MotionProfile, index: int) 
     if profile.bored_puff:
         draw_bored_puff(frame, t)
 
+    draw_state_motion_accents(frame, profile, index, t)
     frame = remove_lower_detached_artifacts(frame)
     return frame
+
+
+def draw_state_motion_accents(frame: Image.Image, profile: MotionProfile, index: int, t: float) -> None:
+    if profile.typing_ticks:
+        draw_coding_keystroke_flash(frame, index)
+    if profile.anger_marks:
+        draw_jitter_lines(frame, index)
+    if profile.jump_amplitude:
+        draw_landing_shadow(frame, t, profile.jump_amplitude)
 
 
 def remove_lower_detached_artifacts(frame: Image.Image) -> Image.Image:
@@ -460,21 +496,33 @@ def draw_typing_ticks(frame: Image.Image, index: int) -> None:
     from PIL import ImageDraw
 
     draw = ImageDraw.Draw(frame)
-    active = index % 6
-    for i in range(3):
-        alpha = 210 if i == active // 2 else 80
-        x = 186 + i * 18
-        draw.rounded_rectangle((x, 297, x + 10, 303), radius=3, fill=(88, 199, 231, alpha))
+    active = (index // 2) % 4
+    for i in range(4):
+        alpha = 220 if i == active else 70
+        x = 176 + i * 15
+        y = 298 + (2 if i == active else 0)
+        draw.rounded_rectangle((x, y, x + 9, y + 5), radius=3, fill=(88, 199, 231, alpha))
+
+    cursor_alpha = 120 + (index % 4) * 28
+    draw.line((239, 279, 239, 292), fill=(78, 190, 228, cursor_alpha), width=3)
 
 
 def draw_idea_pop(frame: Image.Image, t: float) -> None:
     from PIL import ImageDraw
 
     draw = ImageDraw.Draw(frame)
-    lift = round(8 * math.sin(t * math.tau))
-    alpha = int(150 + 80 * max(0, math.sin(t * math.tau)))
-    draw.arc((352, 92 + lift, 400, 140 + lift), 200, 520, fill=(87, 190, 232, alpha), width=6)
-    draw.ellipse((371, 151 + lift, 382, 162 + lift), fill=(87, 190, 232, alpha))
+    lift = round(10 * math.sin(t * math.tau))
+    alpha = int(140 + 90 * max(0, math.sin(t * math.tau)))
+    draw.arc((352, 88 + lift, 402, 138 + lift), 200, 520, fill=(87, 190, 232, alpha), width=6)
+    draw.ellipse((371, 149 + lift, 383, 161 + lift), fill=(87, 190, 232, alpha))
+
+    orbit = t * math.tau
+    for i in range(2):
+        angle = orbit + i * math.pi
+        x = round(376 + 30 * math.cos(angle))
+        y = round(128 + lift + 16 * math.sin(angle))
+        dot_alpha = int(90 + 80 * (i + 1) / 2)
+        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(121, 215, 242, dot_alpha))
 
 
 def draw_reaction_burst(frame: Image.Image, t: float) -> None:
@@ -486,6 +534,10 @@ def draw_reaction_burst(frame: Image.Image, t: float) -> None:
         draw.line((x, y - size, x, y + size), fill=(252, 222, 84, pulse), width=4)
         draw.line((x - size, y, x + size, y), fill=(252, 222, 84, pulse), width=4)
 
+    ray_alpha = int(90 + 80 * max(0, math.sin(t * math.tau * 2)))
+    for x1, y1, x2, y2 in ((74, 208, 107, 196), (410, 216, 438, 202), (250, 66, 250, 32)):
+        draw.line((x1, y1, x2, y2), fill=(255, 244, 150, ray_alpha), width=3)
+
 
 def draw_sleep_bubble(frame: Image.Image, t: float) -> None:
     from PIL import ImageDraw
@@ -496,6 +548,12 @@ def draw_sleep_bubble(frame: Image.Image, t: float) -> None:
     x = 339 + round(12 * math.sin(t * math.tau))
     y = 124 - round(10 * math.sin(t * math.tau))
     draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(215, 244, 255, 145), outline=(98, 192, 231, 170), width=3)
+    for i, small_radius in enumerate((5, 8)):
+        phase = (t + i * 0.18) % 1.0
+        sx = 308 + i * 20 + round(8 * math.sin(phase * math.tau))
+        sy = 172 - round(24 * phase)
+        alpha = int(150 * (1.0 - phase * 0.5))
+        draw.ellipse((sx - small_radius, sy - small_radius, sx + small_radius, sy + small_radius), fill=(215, 244, 255, alpha), outline=(98, 192, 231, alpha), width=2)
 
 
 def draw_anger_marks(frame: Image.Image, t: float) -> None:
@@ -506,6 +564,8 @@ def draw_anger_marks(frame: Image.Image, t: float) -> None:
     for x, y in ((143, 113), (371, 118)):
         draw.line((x - 10, y, x + 10, y), fill=(244, 91, 65, alpha), width=5)
         draw.line((x, y - 10, x, y + 10), fill=(244, 91, 65, alpha), width=5)
+    draw.arc((128, 78, 184, 132), 210, 310, fill=(244, 91, 65, alpha), width=4)
+    draw.arc((334, 80, 390, 134), 230, 330, fill=(244, 91, 65, alpha), width=4)
 
 
 def draw_sparkles(frame: Image.Image, t: float) -> None:
@@ -513,7 +573,7 @@ def draw_sparkles(frame: Image.Image, t: float) -> None:
 
     draw = ImageDraw.Draw(frame)
     alpha = int(150 + 90 * max(0, math.sin(t * math.tau)))
-    for x, y, size in ((132, 158, 10), (382, 172, 12)):
+    for x, y, size in ((132, 158, 10), (382, 172, 12), (109, 105, 7), (408, 101, 8)):
         draw.polygon(
             ((x, y - size), (x + 4, y - 4), (x + size, y), (x + 4, y + 4), (x, y + size), (x - 4, y + 4), (x - size, y), (x - 4, y - 4)),
             fill=(255, 226, 78, alpha),
@@ -526,17 +586,49 @@ def draw_sweat_drop(frame: Image.Image, t: float) -> None:
     draw = ImageDraw.Draw(frame)
     y = 154 + round(8 * math.sin(t * math.tau))
     draw.ellipse((360, y, 377, y + 23), fill=(106, 202, 236, 185), outline=(255, 255, 255, 180), width=2)
+    wobble = round(5 * math.sin(t * math.tau * 2))
+    draw.arc((126 + wobble, 96, 170 + wobble, 140), 205, 510, fill=(87, 190, 232, 130), width=5)
 
 
 def draw_bored_puff(frame: Image.Image, t: float) -> None:
     from PIL import ImageDraw
 
     draw = ImageDraw.Draw(frame)
-    alpha = int(90 + 70 * max(0, math.sin(t * math.tau)))
-    x = 143 - round(12 * t)
-    y = 377 + round(3 * math.sin(t * math.tau))
-    draw.ellipse((x, y, x + 24, y + 16), fill=(245, 245, 245, alpha))
-    draw.ellipse((x + 18, y - 5, x + 32, y + 7), fill=(245, 245, 245, max(0, alpha - 35)))
+    phase = (t * 1.15) % 1.0
+    alpha = int(135 * (1.0 - phase))
+    x = 144 - round(28 * phase)
+    y = 377 - round(8 * phase) + round(3 * math.sin(t * math.tau))
+    draw.ellipse((x, y, x + 25, y + 16), fill=(245, 245, 245, alpha))
+    draw.ellipse((x + 18, y - 5, x + 33, y + 8), fill=(245, 245, 245, max(0, alpha - 35)))
+
+
+def draw_coding_keystroke_flash(frame: Image.Image, index: int) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    pulse = 160 if index % 4 in (0, 1) else 60
+    draw.arc((143, 236, 220, 305), 205, 330, fill=(92, 206, 235, pulse), width=3)
+    draw.arc((226, 240, 302, 307), 210, 340, fill=(92, 206, 235, max(0, pulse - 45)), width=3)
+
+
+def draw_jitter_lines(frame: Image.Image, index: int) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    offset = -4 if index % 2 else 4
+    alpha = 110 if index % 3 else 180
+    for x, y in ((102, 234), (405, 238)):
+        draw.line((x + offset, y - 18, x - offset, y + 18), fill=(244, 91, 65, alpha), width=3)
+
+
+def draw_landing_shadow(frame: Image.Image, t: float, jump_amplitude: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    air = max(0.0, math.sin(t * math.tau))
+    width = 96 - round(32 * min(1.0, air * (jump_amplitude / 18)))
+    alpha = 58 - round(32 * air)
+    draw.ellipse((256 - width, 476, 256 + width, 489), fill=(80, 120, 140, max(12, alpha)))
 
 
 if __name__ == "__main__":
