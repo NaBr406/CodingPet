@@ -472,3 +472,15 @@ ValueError: Missing api_key
 2026-05-06 21:25:01,808 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
 2026-05-06 21:25:57,445 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
 2026-05-06 21:26:55,662 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-06 22:36:14,153 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-06 22:36:14,259 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-06 22:36:14,270 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-06 22:36:14,270 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-06 22:36:14,270 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-06 22:36:14,271 | INFO | MainThread | Random mood switching enabled.
+2026-05-06 22:36:14,271 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-06 22:36:15,026 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-06 22:36:38,504 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-06 22:36:49,043 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-06 22:37:04,251 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-06 22:37:22,719 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding

@@ -5,6 +5,11 @@ from enum import Enum
 
 class PetState(str, Enum):
     IDLE = "idle"
+    GREETING = "greeting"
+    LISTENING = "listening"
+    REVIEWING = "reviewing"
+    DRAGGING = "dragging"
+    RESIZING = "resizing"
     THINKING = "thinking"
     ANGRY = "angry"
     HAPPY = "happy"
@@ -26,6 +31,18 @@ class PetState(str, Enum):
             "IDLE": cls.IDLE,
             "NEUTRAL": cls.IDLE,
             "CALM": cls.IDLE,
+            "GREETING": cls.GREETING,
+            "HELLO": cls.GREETING,
+            "WELCOME": cls.GREETING,
+            "LISTENING": cls.LISTENING,
+            "HEARING": cls.LISTENING,
+            "RECEPTIVE": cls.LISTENING,
+            "REVIEWING": cls.REVIEWING,
+            "REVIEW": cls.REVIEWING,
+            "INSPECTING": cls.REVIEWING,
+            "SCANNING": cls.REVIEWING,
+            "DRAGGING": cls.DRAGGING,
+            "RESIZING": cls.RESIZING,
             "THINKING": cls.THINKING,
             "FOCUSED": cls.THINKING,
             "ANALYTICAL": cls.THINKING,

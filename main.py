@@ -23,9 +23,16 @@ class CodingPetController(QObject):
         self._chat_worker: ChatWorker | None = None
         self._observer_worker: ObserverWorker | None = None
         self._interaction_busy = False
+        self._manual_override_active = False
 
         self.window = PetWindow(config)
         self.window.chat_submitted.connect(self._start_chat)
+        self.window.chat_opened.connect(self._handle_chat_opened)
+        self.window.chat_cancelled.connect(self._handle_chat_cancelled)
+        self.window.drag_started.connect(self._handle_drag_started)
+        self.window.drag_finished.connect(self._handle_drag_finished)
+        self.window.resize_started.connect(self._handle_resize_started)
+        self.window.resize_finished.connect(self._handle_resize_finished)
 
         self._state_reset_timer = QTimer(self)
         self._state_reset_timer.setSingleShot(True)
@@ -37,6 +44,7 @@ class CodingPetController(QObject):
 
     def start(self) -> None:
         self.window.show()
+        self.window.set_state(PetState.GREETING)
         self.window.show_message("Double-click me when your code starts drifting.", 2800)
 
         self._logger.info("Phase 1 Success: transparent pet window ready.")
@@ -72,6 +80,7 @@ class CodingPetController(QObject):
         self.window.set_state(PetState.THINKING)
         self.window.show_message("Thinking...", 1600)
         self._interaction_busy = True
+        self._manual_override_active = False
         self._random_mood_timer.stop()
 
         worker = ChatWorker(self._config, text)
@@ -89,6 +98,7 @@ class CodingPetController(QObject):
     def _handle_model_reply(self, message: str, emotion: str) -> None:
         state = PetState.from_emotion(emotion)
         self._interaction_busy = True
+        self._manual_override_active = False
         self._random_mood_timer.stop()
         self.window.set_state(state)
         self.window.show_message(message)
@@ -101,12 +111,17 @@ class CodingPetController(QObject):
 
     def _finish_interaction_state(self) -> None:
         self._interaction_busy = False
+        self._manual_override_active = False
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
 
     def _switch_random_mood(self) -> None:
-        if self._interaction_busy or (self._chat_worker is not None and self._chat_worker.isRunning()):
+        if (
+            self._interaction_busy
+            or self._manual_override_active
+            or (self._chat_worker is not None and self._chat_worker.isRunning())
+        ):
             self._schedule_random_mood()
             return
 
@@ -117,6 +132,44 @@ class CodingPetController(QObject):
         min_ms = self._config.runtime.random_mood_min_seconds * 1000
         max_ms = self._config.runtime.random_mood_max_seconds * 1000
         self._random_mood_timer.start(random.randint(min_ms, max_ms))
+
+    def _handle_chat_opened(self) -> None:
+        if self._interaction_busy:
+            return
+        self._manual_override_active = True
+        self._random_mood_timer.stop()
+        self.window.set_state(PetState.LISTENING)
+
+    def _handle_chat_cancelled(self) -> None:
+        self._clear_manual_override()
+
+    def _handle_drag_started(self) -> None:
+        if self._interaction_busy:
+            return
+        self._manual_override_active = True
+        self._random_mood_timer.stop()
+        self.window.set_state(PetState.DRAGGING)
+
+    def _handle_drag_finished(self) -> None:
+        self._clear_manual_override()
+
+    def _handle_resize_started(self) -> None:
+        if self._interaction_busy:
+            return
+        self._manual_override_active = True
+        self._random_mood_timer.stop()
+        self.window.set_state(PetState.RESIZING)
+
+    def _handle_resize_finished(self) -> None:
+        self._clear_manual_override()
+
+    def _clear_manual_override(self) -> None:
+        if self._interaction_busy:
+            return
+        self._manual_override_active = False
+        self.window.set_state(PetState.IDLE)
+        if self._config.runtime.random_mood_enabled:
+            self._schedule_random_mood()
 
 
 def main() -> int:

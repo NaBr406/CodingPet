@@ -29,6 +29,11 @@ RESIZE_RIGHT = 4
 RESIZE_BOTTOM = 8
 STATE_ANIMATION_FRAME_MS = {
     PetState.IDLE: 90,
+    PetState.GREETING: 66,
+    PetState.LISTENING: 74,
+    PetState.REVIEWING: 72,
+    PetState.DRAGGING: 52,
+    PetState.RESIZING: 54,
     PetState.THINKING: 82,
     PetState.ANGRY: 58,
     PetState.HAPPY: 56,
@@ -297,6 +302,12 @@ class PetSpriteLabel(QLabel):
 
 class PetWindow(QWidget):
     chat_submitted = pyqtSignal(str)
+    chat_opened = pyqtSignal()
+    chat_cancelled = pyqtSignal()
+    drag_started = pyqtSignal()
+    drag_finished = pyqtSignal()
+    resize_started = pyqtSignal()
+    resize_finished = pyqtSignal()
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__(None, WINDOW_FLAGS)
@@ -336,6 +347,7 @@ class PetWindow(QWidget):
         self._sprite.double_clicked.connect(self.show_chat_input)
 
         self._chat_input.submitted.connect(self.chat_submitted.emit)
+        self._chat_input.cancelled.connect(self.chat_cancelled.emit)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -365,6 +377,7 @@ class PetWindow(QWidget):
     def show_chat_input(self) -> None:
         self._chat_input.set_anchor_rect(self.frameGeometry())
         self._chat_input.show_input()
+        self.chat_opened.emit()
 
     def moveEvent(self, event: QEvent) -> None:
         super().moveEvent(event)
@@ -396,6 +409,7 @@ class PetWindow(QWidget):
 
         self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         self._sprite.setCursor(Qt.CursorShape.ClosedHandCursor)
+        self.drag_started.emit()
 
     def _drag_move(self, event: QMouseEvent) -> None:
         if self._resize_edges:
@@ -410,10 +424,13 @@ class PetWindow(QWidget):
 
     def _end_drag(self, event: QMouseEvent) -> None:
         _ = event
+        had_dragging = self._drag_offset is not None
         self._drag_offset = None
         self._resize_edges = 0
         self._resize_start_pos = None
         self._sprite.setCursor(Qt.CursorShape.OpenHandCursor)
+        if had_dragging:
+            self.drag_finished.emit()
 
     def _start_resize(self, event: QMouseEvent) -> None:
         edges = self._resize_edges_at(event.position().toPoint()) or (RESIZE_RIGHT | RESIZE_BOTTOM)
@@ -425,6 +442,7 @@ class PetWindow(QWidget):
         self._resize_start_geometry = self.frameGeometry()
         self._resize_edges = edges
         self._sprite.setCursor(self._cursor_for_edges(edges))
+        self.resize_started.emit()
 
     def _resize_move(self, event: QMouseEvent) -> None:
         if self._resize_edges:
@@ -436,9 +454,12 @@ class PetWindow(QWidget):
 
     def _end_resize(self, event: QMouseEvent) -> None:
         _ = event
+        had_resize = self._resize_start_pos is not None or self._resize_edges != 0
         self._resize_start_pos = None
         self._resize_edges = 0
         self._sprite.setCursor(Qt.CursorShape.OpenHandCursor)
+        if had_resize:
+            self.resize_finished.emit()
 
     def _edge_resize_move(self, event: QMouseEvent) -> None:
         if self._resize_start_pos is None or not (

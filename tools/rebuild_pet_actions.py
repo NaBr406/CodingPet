@@ -36,10 +36,20 @@ class MotionProfile:
     proud_sparkles: bool = False
     typing_ticks: bool = False
     bored_puff: bool = False
+    wave_motion: bool = False
+    listen_bob: bool = False
+    review_scan: bool = False
+    drag_swoosh: bool = False
+    resize_push: bool = False
 
 
 STATE_ORDER = (
     "idle",
+    "greeting",
+    "listening",
+    "reviewing",
+    "dragging",
+    "resizing",
     "thinking",
     "angry",
     "happy",
@@ -70,6 +80,52 @@ MOTION_PROFILES = {
         scale_amplitude=0.008,
         squash_amplitude=0.006,
         blink_frames=(18, 19),
+    ),
+    "greeting": MotionProfile(
+        y_amplitude=5,
+        x_amplitude=1.6,
+        scale_amplitude=0.012,
+        rotation_amplitude=1.8,
+        phase=0.08,
+        wave_motion=True,
+        blink_frames=(7, 8),
+    ),
+    "listening": MotionProfile(
+        y_amplitude=3,
+        x_amplitude=1.4,
+        scale_amplitude=0.006,
+        rotation_amplitude=1.6,
+        phase=0.18,
+        listen_bob=True,
+        blink_frames=(13,),
+    ),
+    "reviewing": MotionProfile(
+        y_amplitude=3,
+        x_amplitude=1.2,
+        scale_amplitude=0.007,
+        rotation_amplitude=1.0,
+        phase=0.28,
+        review_scan=True,
+        blink_frames=(10, 11),
+    ),
+    "dragging": MotionProfile(
+        y_amplitude=5,
+        x_amplitude=3.8,
+        scale_amplitude=0.012,
+        rotation_amplitude=4.8,
+        phase=0.22,
+        drag_swoosh=True,
+        blink_frames=(15,),
+    ),
+    "resizing": MotionProfile(
+        y_amplitude=2,
+        x_amplitude=1.8,
+        scale_amplitude=0.018,
+        rotation_amplitude=1.4,
+        phase=0.34,
+        squash_amplitude=0.012,
+        resize_push=True,
+        blink_frames=(8, 9),
     ),
     "thinking": MotionProfile(
         y_amplitude=4,
@@ -164,7 +220,8 @@ def main() -> int:
     parser.add_argument(
         "sheet",
         type=Path,
-        help="Path to the generated 5x2 action contact sheet.",
+        nargs="?",
+        help="Optional path to the generated 5x2 action contact sheet.",
     )
     parser.add_argument(
         "--reference-name",
@@ -173,26 +230,57 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    sheet_path = args.sheet.expanduser().resolve()
-    if not sheet_path.exists():
-        raise SystemExit(f"Sheet not found: {sheet_path}")
-
-    REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
-    reference_path = REFERENCE_DIR / args.reference_name
-    if sheet_path != reference_path.resolve():
-        shutil.copy2(sheet_path, reference_path)
-
-    sheet = Image.open(reference_path).convert("RGBA")
-    sources = extract_state_sources(sheet)
+    sources = load_state_sources(args.sheet, args.reference_name)
 
     for state in STATE_ORDER:
         source = sources[state]
         write_state_source(state, source)
         write_state_frames(state, source)
 
-    print(f"Copied reference sheet: {reference_path}")
+    if args.sheet is not None:
+        reference_path = (REFERENCE_DIR / args.reference_name).resolve()
+        print(f"Copied reference sheet: {reference_path}")
     print(f"Rebuilt {len(STATE_ORDER)} states x {FRAME_COUNT} frames under {ASSETS_DIR}")
     return 0
+
+
+def load_state_sources(sheet_path_arg: Path | None, reference_name: str) -> dict[str, Image.Image]:
+    if sheet_path_arg is not None:
+        sheet_path = sheet_path_arg.expanduser().resolve()
+        if not sheet_path.exists():
+            raise SystemExit(f"Sheet not found: {sheet_path}")
+
+        REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
+        reference_path = REFERENCE_DIR / reference_name
+        if sheet_path != reference_path.resolve():
+            shutil.copy2(sheet_path, reference_path)
+
+        sheet = Image.open(reference_path).convert("RGBA")
+        sheet_sources = extract_state_sources(sheet)
+    else:
+        sheet_sources = {}
+
+    source_dir = ASSETS_DIR / "source"
+    sources: dict[str, Image.Image] = {}
+    missing_states: list[str] = []
+    for state in STATE_ORDER:
+        explicit_source = source_dir / f"{state}_source.png"
+        if explicit_source.exists():
+            sources[state] = Image.open(explicit_source).convert("RGBA")
+            continue
+        if state in sheet_sources:
+            sources[state] = sheet_sources[state]
+            continue
+        missing_states.append(state)
+
+    if missing_states:
+        available = ", ".join(sorted(path.name for path in source_dir.glob("*_source.png")))
+        raise SystemExit(
+            "Missing source images for states: "
+            + ", ".join(missing_states)
+            + (f". Available in assets/source: {available}" if available else ".")
+        )
+    return sources
 
 
 def extract_state_sources(sheet: Image.Image) -> dict[str, Image.Image]:
@@ -429,6 +517,16 @@ def draw_state_motion_accents(frame: Image.Image, profile: MotionProfile, index:
         draw_jitter_lines(frame, index)
     if profile.jump_amplitude:
         draw_landing_shadow(frame, t, profile.jump_amplitude)
+    if profile.wave_motion:
+        draw_wave_pulse(frame, t)
+    if profile.listen_bob:
+        draw_listen_pulse(frame, t)
+    if profile.review_scan:
+        draw_review_focus(frame, t)
+    if profile.drag_swoosh:
+        draw_drag_swoosh(frame, t)
+    if profile.resize_push:
+        draw_resize_push(frame, t)
 
 
 def remove_lower_detached_artifacts(frame: Image.Image) -> Image.Image:
@@ -629,6 +727,59 @@ def draw_landing_shadow(frame: Image.Image, t: float, jump_amplitude: float) -> 
     width = 96 - round(32 * min(1.0, air * (jump_amplitude / 18)))
     alpha = 58 - round(32 * air)
     draw.ellipse((256 - width, 476, 256 + width, 489), fill=(80, 120, 140, max(12, alpha)))
+
+
+def draw_wave_pulse(frame: Image.Image, t: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    alpha = int(72 + 48 * max(0.0, math.sin(t * math.tau)))
+    for inset in (0, 10):
+        draw.arc((308 + inset, 82 + inset, 434 + inset, 208 + inset), 280, 28, fill=(109, 203, 237, alpha - inset * 2), width=4)
+
+
+def draw_listen_pulse(frame: Image.Image, t: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    alpha = int(88 + 40 * max(0.0, math.sin(t * math.tau)))
+    for offset in (0, 14):
+        draw.arc((318 + offset, 112 + offset, 410 + offset, 204 + offset), 230, 355, fill=(111, 209, 239, max(0, alpha - offset * 2)), width=4)
+
+
+def draw_review_focus(frame: Image.Image, t: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    scan_y = 226 + round(18 * math.sin(t * math.tau))
+    glow = int(120 + 70 * max(0.0, math.sin(t * math.tau)))
+    draw.rounded_rectangle((175, scan_y, 330, scan_y + 6), radius=3, fill=(99, 214, 244, glow))
+    draw.line((188, 211, 188, 306), fill=(99, 214, 244, 82), width=2)
+    draw.line((316, 211, 316, 306), fill=(99, 214, 244, 82), width=2)
+
+
+def draw_drag_swoosh(frame: Image.Image, t: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    alpha = int(80 + 55 * max(0.0, math.sin(t * math.tau)))
+    draw.arc((42, 164, 188, 316), 210, 328, fill=(110, 208, 239, alpha), width=4)
+    draw.arc((66, 190, 208, 334), 210, 320, fill=(110, 208, 239, max(0, alpha - 28)), width=3)
+
+
+def draw_resize_push(frame: Image.Image, t: float) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(frame)
+    alpha = int(94 + 50 * max(0.0, math.sin(t * math.tau)))
+    pulse = round(6 * math.sin(t * math.tau))
+    for left, top, right, bottom in ((92, 166, 152, 226), (360, 166, 420, 226)):
+        draw.rounded_rectangle(
+            (left - pulse, top - pulse, right + pulse, bottom + pulse),
+            radius=10,
+            outline=(113, 210, 240, alpha),
+            width=3,
+        )
 
 
 if __name__ == "__main__":

@@ -16,6 +16,11 @@ from pet_state import PetState
 
 STATE_PROMPTS = {
     PetState.IDLE: "relaxed idle pose, neutral expression, full body, white background",
+    PetState.GREETING: "friendly waving pose, welcoming expression, full body, white background",
+    PetState.LISTENING: "attentive listening pose, curious expression, full body, white background",
+    PetState.REVIEWING: "focused reviewing pose with tablet, analytical expression, full body, white background",
+    PetState.DRAGGING: "dynamic balancing pose while moving quickly, playful determined expression, full body, white background",
+    PetState.RESIZING: "energetic pushing pose with both hands, focused upbeat expression, full body, white background",
     PetState.THINKING: "focused thinking pose, analytical expression, full body, white background",
     PetState.ANGRY: "annoyed lecturing pose, critical expression, full body, white background",
     PetState.HAPPY: "cheerful celebratory pose, bright smile, full body, white background",
@@ -23,6 +28,11 @@ STATE_PROMPTS = {
 
 FRAME_DIRS = {
     PetState.IDLE: "idle",
+    PetState.GREETING: "greeting",
+    PetState.LISTENING: "listening",
+    PetState.REVIEWING: "reviewing",
+    PetState.DRAGGING: "dragging",
+    PetState.RESIZING: "resizing",
     PetState.THINKING: "thinking",
     PetState.ANGRY: "angry",
     PetState.HAPPY: "happy",

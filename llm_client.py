@@ -35,7 +35,7 @@ def generate_chat_reply(config: AppConfig, user_text: str) -> ModelReply:
                     "You are CodingPet, a floating desktop coding companion. "
                     f"Stay in character: {config.pet_preset.personality_prompt} "
                     "Reply with compact JSON only: "
-                    '{"message":"short reply","emotion":"IDLE|THINKING|ANGRY|HAPPY"}'
+                    '{"message":"short reply","emotion":"IDLE|GREETING|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|SLEEPY|CONFUSED|SURPRISED|PROUD|BORED"}'
                 ),
             },
             {"role": "user", "content": user_text},
@@ -62,7 +62,7 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
                     f"Stay in character: {config.pet_preset.personality_prompt} "
                     "Analyze the screenshot, infer what the user is coding, and proactively comment. "
                     "Reply with compact JSON only: "
-                    '{"message":"one short roast or tip","emotion":"IDLE|THINKING|ANGRY|HAPPY"}'
+                    '{"message":"one short roast or tip","emotion":"IDLE|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|CONFUSED|SURPRISED|PROUD|BORED"}'
                 ),
             },
             {
@@ -179,7 +179,11 @@ def _parse_model_reply(raw_text: str, fallback_message: str) -> ModelReply:
         except json.JSONDecodeError:
             pass
 
-    emotion_match = re.search(r"\b(IDLE|THINKING|ANGRY|HAPPY)\b", cleaned, flags=re.IGNORECASE)
+    emotion_match = re.search(
+        r"\b(IDLE|GREETING|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|SLEEPY|CONFUSED|SURPRISED|PROUD|BORED)\b",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     emotion = PetState.from_emotion(emotion_match.group(1) if emotion_match else None)
     message = cleaned.strip() or fallback_message
     return ModelReply(message=message, emotion=emotion)
