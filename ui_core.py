@@ -28,16 +28,16 @@ RESIZE_TOP = 2
 RESIZE_RIGHT = 4
 RESIZE_BOTTOM = 8
 STATE_ANIMATION_FRAME_MS = {
-    PetState.IDLE: 65,
-    PetState.THINKING: 60,
-    PetState.ANGRY: 45,
-    PetState.HAPPY: 48,
-    PetState.CODING: 48,
-    PetState.SLEEPY: 80,
-    PetState.CONFUSED: 58,
-    PetState.SURPRISED: 46,
-    PetState.PROUD: 64,
-    PetState.BORED: 76,
+    PetState.IDLE: 90,
+    PetState.THINKING: 82,
+    PetState.ANGRY: 58,
+    PetState.HAPPY: 56,
+    PetState.CODING: 62,
+    PetState.SLEEPY: 105,
+    PetState.CONFUSED: 78,
+    PetState.SURPRISED: 58,
+    PetState.PROUD: 88,
+    PetState.BORED: 110,
 }
 
 
@@ -309,6 +309,7 @@ class PetWindow(QWidget):
         self._sprite_size = self._resize_start_size
         self._positioned = False
         self._pixmap_cache: dict[PetState, QPixmap] = {}
+        self._frame_cache: dict[PetState, list[QPixmap]] = {}
         self._animation_frames: list[QPixmap] = []
         self._animation_index = 0
         self._animation_timer = QTimer(self)
@@ -551,15 +552,21 @@ class PetWindow(QWidget):
         return self._config.assets_dir / state.asset_filename
 
     def _load_state_frames(self, state: PetState) -> list[QPixmap]:
+        if state in self._frame_cache:
+            return self._frame_cache[state]
+
         frame_dir = self._config.assets_dir / state.value
         if frame_dir.is_dir():
             frames = self._load_frames_from_directory(frame_dir)
             if frames:
+                self._frame_cache[state] = frames
                 return frames
 
         pixmap = self._load_state_pixmap(state)
         if not pixmap.isNull():
-            return [pixmap]
+            frames = [pixmap]
+            self._frame_cache[state] = frames
+            return frames
 
         if state is not PetState.IDLE:
             return self._load_state_frames(PetState.IDLE)
