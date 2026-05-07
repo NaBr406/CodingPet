@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import base64
-import json
 import re
 from dataclasses import dataclass
 from typing import Any
-from urllib.request import urlopen
 
 from openai import OpenAI
 
@@ -17,6 +15,10 @@ from pet_state import PetState
 class ModelReply:
     message: str
     emotion: PetState
+
+
+STATE_NAMES = "|".join(state.name for state in PetState)
+STATE_PREFIX_PATTERN = re.compile(r"^\s*\[([A-Z_]+)\]\s*(.*)$", flags=re.IGNORECASE | re.DOTALL)
 
 
 def generate_chat_reply(config: AppConfig, user_text: str) -> ModelReply:
@@ -34,15 +36,16 @@ def generate_chat_reply(config: AppConfig, user_text: str) -> ModelReply:
                 "content": (
                     "You are CodingPet, a floating desktop coding companion. "
                     f"Stay in character: {config.pet_preset.personality_prompt} "
-                    "Reply with compact JSON only: "
-                    '{"message":"short reply","emotion":"IDLE|GREETING|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|SLEEPY|CONFUSED|SURPRISED|PROUD|BORED"}'
+                    "Reply with exactly one line in this format: [STATE] message. "
+                    f"Use only these states: {STATE_NAMES}. "
+                    "Do not use JSON, markdown, or extra commentary."
                 ),
             },
             {"role": "user", "content": user_text},
         ],
     )
     raw_text = _extract_chat_text(response)
-    return _parse_model_reply(raw_text, fallback_message="Still thinking about that.")
+    return parse_model_reply(raw_text, fallback_message="Still thinking about that.")
 
 
 def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: str) -> ModelReply:
@@ -61,8 +64,9 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
                     "You are CodingPet, a desktop coding companion that watches code quietly. "
                     f"Stay in character: {config.pet_preset.personality_prompt} "
                     "Analyze the screenshot, infer what the user is coding, and proactively comment. "
-                    "Reply with compact JSON only: "
-                    '{"message":"one short roast or tip","emotion":"IDLE|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|CONFUSED|SURPRISED|PROUD|BORED"}'
+                    "Reply with exactly one line in this format: [STATE] one short roast or tip. "
+                    f"Use only these states: {STATE_NAMES}. "
+                    "Do not use JSON, markdown, or extra commentary."
                 ),
             },
             {
@@ -87,33 +91,7 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
         ],
     )
     raw_text = _extract_chat_text(response)
-    return _parse_model_reply(raw_text, fallback_message="That code smells unstable.")
-
-
-def generate_character_image(config: AppConfig, prompt: str) -> bytes:
-    client = _build_client(
-        base_url=config.image_gen.base_url,
-        api_key=config.image_gen.api_key,
-        timeout_seconds=config.runtime.request_timeout_seconds,
-    )
-    response = client.images.generate(
-        model=config.image_gen.model_name,
-        prompt=prompt,
-    )
-    if not getattr(response, "data", None):
-        raise ValueError("Image generation response did not include data")
-
-    first_item = response.data[0]
-    b64_data = _get_field(first_item, "b64_json")
-    if isinstance(b64_data, str) and b64_data.strip():
-        return base64.b64decode(b64_data)
-
-    url = _get_field(first_item, "url")
-    if isinstance(url, str) and url.strip():
-        with urlopen(url, timeout=config.runtime.request_timeout_seconds) as remote_image:
-            return remote_image.read()
-
-    raise ValueError("Image generation response did not include b64_json or url")
+    return parse_model_reply(raw_text, fallback_message="That code smells unstable.")
 
 
 def _build_client(base_url: str, api_key: str, timeout_seconds: float) -> OpenAI:
@@ -162,30 +140,18 @@ def _coerce_message_content(content: Any) -> str:
     return str(content).strip()
 
 
-def _parse_model_reply(raw_text: str, fallback_message: str) -> ModelReply:
+def parse_model_reply(raw_text: str, fallback_message: str) -> ModelReply:
     cleaned = _strip_code_fences(raw_text)
-    if cleaned:
-        try:
-            payload = json.loads(cleaned)
-            if isinstance(payload, dict):
-                message = str(
-                    payload.get("message")
-                    or payload.get("reply")
-                    or payload.get("text")
-                    or fallback_message
-                ).strip()
-                emotion = PetState.from_emotion(str(payload.get("emotion") or payload.get("sentiment")))
-                return ModelReply(message=message or fallback_message, emotion=emotion)
-        except json.JSONDecodeError:
-            pass
+    match = STATE_PREFIX_PATTERN.match(cleaned)
+    if not match:
+        return ModelReply(message=fallback_message, emotion=PetState.IDLE)
 
-    emotion_match = re.search(
-        r"\b(IDLE|GREETING|LISTENING|REVIEWING|THINKING|ANGRY|HAPPY|CODING|SLEEPY|CONFUSED|SURPRISED|PROUD|BORED)\b",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    emotion = PetState.from_emotion(emotion_match.group(1) if emotion_match else None)
-    message = cleaned.strip() or fallback_message
+    state_token = match.group(1).strip().upper()
+    emotion = PetState.__members__.get(state_token)
+    if emotion is None:
+        return ModelReply(message=fallback_message, emotion=PetState.IDLE)
+
+    message = match.group(2).strip() or fallback_message
     return ModelReply(message=message, emotion=emotion)
 
 
@@ -195,9 +161,3 @@ def _strip_code_fences(text: str) -> str:
         candidate = re.sub(r"^```[a-zA-Z0-9_-]*\s*", "", candidate)
         candidate = re.sub(r"\s*```$", "", candidate)
     return candidate.strip()
-
-
-def _get_field(item: Any, field_name: str) -> Any:
-    if isinstance(item, dict):
-        return item.get(field_name)
-    return getattr(item, field_name, None)

@@ -87,7 +87,7 @@ class CodingPetController(QObject):
 
         worker = ChatWorker(self._config, text)
         worker.response_ready.connect(self._handle_model_reply)
-        worker.transient_message.connect(self._handle_transient_message)
+        worker.request_failed.connect(self._handle_interaction_failed)
         worker.finished.connect(self._clear_chat_worker)
         self._chat_worker = worker
         worker.start()
@@ -119,7 +119,7 @@ class CodingPetController(QObject):
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
 
-    def _handle_transient_message(self, message: str) -> None:
+    def _handle_interaction_failed(self, message: str) -> None:
         self.window.set_state(PetState.IDLE)
         self.window.show_message(message)
         self._finish_interaction_state()

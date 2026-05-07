@@ -37,7 +37,7 @@ class ObserverWorker(QThread):
             try:
                 self._observe_once()
             except Exception:
-                logger.exception("Observer cycle failed.")
+                logger.warning("Observer cycle failed; falling back to IDLE.", exc_info=True)
                 self.observation_failed.emit()
             self._sleep_interruptibly(self._interval_ms)
 

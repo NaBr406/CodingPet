@@ -20,15 +20,7 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
-class ImageGenConfig:
-    base_url: str
-    api_key: str
-    model_name: str
-
-
-@dataclass(frozen=True)
 class PetPresetConfig:
-    appearance_prompt: str
     personality_prompt: str
 
 
@@ -57,7 +49,6 @@ class AppConfig:
     config_path: Path
     project_dir: Path
     llm: LLMConfig
-    image_gen: ImageGenConfig
     pet_preset: PetPresetConfig
     observer: ObserverConfig
     runtime: RuntimeConfig
@@ -76,7 +67,6 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         raw = yaml.safe_load(handle) or {}
 
     llm_raw = _read_section(raw, "llm")
-    image_gen_raw = _read_section(raw, "image_gen")
     preset_raw = _read_section(raw, "pet_preset")
     observer_raw = raw.get("observer") or {}
     runtime_raw = raw.get("runtime") or {}
@@ -87,13 +77,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         vision_model_name=_require_str(llm_raw, "llm.vision_model_name"),
         chat_model_name=_require_str(llm_raw, "llm.chat_model_name"),
     )
-    image_gen = ImageGenConfig(
-        base_url=_require_str(image_gen_raw, "image_gen.base_url"),
-        api_key=_require_str(image_gen_raw, "image_gen.api_key", allow_empty=True),
-        model_name=_require_str(image_gen_raw, "image_gen.model_name"),
-    )
     preset = PetPresetConfig(
-        appearance_prompt=_require_str(preset_raw, "pet_preset.appearance_prompt"),
         personality_prompt=_require_str(preset_raw, "pet_preset.personality_prompt"),
     )
     observer = ObserverConfig(
@@ -126,7 +110,6 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         config_path=config_path,
         project_dir=config_path.parent,
         llm=llm,
-        image_gen=image_gen,
         pet_preset=preset,
         observer=observer,
         runtime=runtime,

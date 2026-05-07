@@ -11,7 +11,7 @@ from logging_utils import LOGGER_NAME
 
 class ChatWorker(QThread):
     response_ready = pyqtSignal(str, str)
-    transient_message = pyqtSignal(str)
+    request_failed = pyqtSignal(str)
 
     def __init__(self, config: AppConfig, user_text: str) -> None:
         super().__init__()
@@ -23,8 +23,8 @@ class ChatWorker(QThread):
         try:
             reply = generate_chat_reply(self._config, self._user_text)
         except Exception:
-            logger.exception("Chat request failed.")
-            self.transient_message.emit("The uplink is noisy. Try again in a moment.")
+            logger.warning("Chat request failed; falling back to IDLE.", exc_info=True)
+            self.request_failed.emit("The uplink is noisy. Try again in a moment.")
             return
 
         self.response_ready.emit(reply.message, reply.emotion.value)

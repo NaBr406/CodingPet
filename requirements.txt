@@ -1,7 +1,5 @@
 PyQt6
 Pillow
-rembg
-onnxruntime
 mss
 pygetwindow
 openai
