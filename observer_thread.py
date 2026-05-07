@@ -15,6 +15,8 @@ from logging_utils import LOGGER_NAME
 
 
 class ObserverWorker(QThread):
+    observation_started = pyqtSignal()
+    observation_failed = pyqtSignal()
     observation_ready = pyqtSignal(str, str)
 
     def __init__(self, config: AppConfig) -> None:
@@ -36,6 +38,7 @@ class ObserverWorker(QThread):
                 self._observe_once()
             except Exception:
                 logger.exception("Observer cycle failed.")
+                self.observation_failed.emit()
             self._sleep_interruptibly(self._interval_ms)
 
     def _observe_once(self) -> None:
@@ -51,6 +54,7 @@ class ObserverWorker(QThread):
             return
 
         screenshot_base64 = self._capture_active_region(active_window)
+        self.observation_started.emit()
         reply = analyze_screenshot(self._config, screenshot_base64, title)
         logger.info("Observer produced a proactive comment for window: %s", title)
         self.observation_ready.emit(reply.message, reply.emotion.value)

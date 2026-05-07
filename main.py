@@ -52,6 +52,8 @@ class CodingPetController(QObject):
 
         if self._config.observer.enabled:
             self._observer_worker = ObserverWorker(self._config)
+            self._observer_worker.observation_started.connect(self._handle_observation_started)
+            self._observer_worker.observation_failed.connect(self._handle_observation_finished_without_reply)
             self._observer_worker.observation_ready.connect(self._handle_model_reply)
             self._observer_worker.start()
             self._logger.info("Phase 3 Success: observer monitoring started.")
@@ -103,6 +105,19 @@ class CodingPetController(QObject):
         self.window.set_state(state)
         self.window.show_message(message)
         self._state_reset_timer.start(self._config.runtime.state_reset_ms)
+
+    def _handle_observation_started(self) -> None:
+        if self._interaction_busy or self._manual_override_active:
+            return
+        self._random_mood_timer.stop()
+        self.window.set_state(PetState.REVIEWING)
+
+    def _handle_observation_finished_without_reply(self) -> None:
+        if self._interaction_busy or self._manual_override_active:
+            return
+        self.window.set_state(PetState.IDLE)
+        if self._config.runtime.random_mood_enabled:
+            self._schedule_random_mood()
 
     def _handle_transient_message(self, message: str) -> None:
         self.window.set_state(PetState.IDLE)

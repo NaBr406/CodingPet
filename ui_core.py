@@ -20,6 +20,11 @@ WINDOW_FLAGS = (
     | Qt.WindowType.NoDropShadowWindowHint
 )
 
+DWMWA_WINDOW_CORNER_PREFERENCE = 33
+DWMWA_BORDER_COLOR = 34
+DWMWCP_DONOTROUND = 1
+DWM_COLOR_NONE = 0xFFFFFFFE
+
 SUPPORTED_FRAME_SUFFIXES = {".png", ".webp", ".jpg", ".jpeg", ".bmp"}
 FRAME_SUFFIX_PRIORITY = (".png", ".webp", ".jpg", ".jpeg", ".bmp")
 RESIZE_MARGIN = 10
@@ -46,10 +51,45 @@ STATE_ANIMATION_FRAME_MS = {
 }
 
 
+def _remove_system_window_outline(widget: QWidget) -> None:
+    if sys.platform != "win32":
+        return
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        # Windows can draw a 1px DWM outline around transparent frameless windows.
+        hwnd = wintypes.HWND(int(widget.winId()))
+        dwm_set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
+
+        corner_preference = ctypes.c_int(DWMWCP_DONOTROUND)
+        dwm_set_window_attribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(corner_preference),
+            ctypes.sizeof(corner_preference),
+        )
+
+        border_color = ctypes.c_uint(DWM_COLOR_NONE)
+        dwm_set_window_attribute(
+            hwnd,
+            DWMWA_BORDER_COLOR,
+            ctypes.byref(border_color),
+            ctypes.sizeof(border_color),
+        )
+    except (AttributeError, OSError, ValueError):
+        logging.getLogger(LOGGER_NAME).debug(
+            "Unable to disable the system window outline.",
+            exc_info=True,
+        )
+
+
 class BubbleMessageWidget(QWidget):
     def __init__(self) -> None:
         super().__init__(None, WINDOW_FLAGS | Qt.WindowType.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        _remove_system_window_outline(self)
 
         self._anchor_rect = QRect()
         self._tail_on_left = True
@@ -89,6 +129,7 @@ class BubbleMessageWidget(QWidget):
         self._apply_label_geometry()
         self._place_near_anchor()
         self.show()
+        _remove_system_window_outline(self)
         self.raise_()
         self._hide_timer.start(max(500, duration_ms))
 
@@ -157,6 +198,7 @@ class ChatInputWidget(QWidget):
     def __init__(self) -> None:
         super().__init__(None, WINDOW_FLAGS)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        _remove_system_window_outline(self)
         self._anchor_rect = QRect()
 
         self._line_edit = QLineEdit(self)
@@ -190,6 +232,7 @@ class ChatInputWidget(QWidget):
         self._line_edit.clear()
         self._place_near_anchor()
         self.show()
+        _remove_system_window_outline(self)
         self.raise_()
         self.activateWindow()
         self._line_edit.setFocus()
@@ -385,6 +428,7 @@ class PetWindow(QWidget):
 
     def showEvent(self, event: QEvent) -> None:
         super().showEvent(event)
+        _remove_system_window_outline(self)
         if not self._positioned:
             self._move_to_default_position()
             self._positioned = True
