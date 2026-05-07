@@ -30,14 +30,14 @@ class ObserverWorker(QThread):
 
     def run(self) -> None:
         logger = logging.getLogger(LOGGER_NAME)
-        logger.info("Phase 3 Success: observer thread armed.")
+        logger.info("阶段 3 成功：观察线程已就绪。")
 
         self._sleep_interruptibly(self._interval_ms)
         while self._running:
             try:
                 self._observe_once()
             except Exception:
-                logger.warning("Observer cycle failed; falling back to IDLE.", exc_info=True)
+                logger.warning("观察循环失败，已回退到 IDLE。", exc_info=True)
                 self.observation_failed.emit()
             self._sleep_interruptibly(self._interval_ms)
 
@@ -56,7 +56,7 @@ class ObserverWorker(QThread):
         screenshot_base64 = self._capture_active_region(active_window)
         self.observation_started.emit()
         reply = analyze_screenshot(self._config, screenshot_base64, title)
-        logger.info("Observer produced a proactive comment for window: %s", title)
+        logger.info("观察线程已为窗口生成主动评论：%s", title)
         self.observation_ready.emit(reply.message, reply.emotion.value)
 
     def _is_ide_window(self, title: str) -> bool:

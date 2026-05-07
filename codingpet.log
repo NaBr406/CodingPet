@@ -802,3 +802,158 @@ openai.BadRequestError: Error code: 400 - {'error': {'code': '400', 'message': '
 2026-05-07 23:11:52,950 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
 2026-05-07 23:12:23,526 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
 2026-05-07 23:14:05,513 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:17:43,646 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:17:43,754 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:17:43,763 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-07 23:17:43,763 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-07 23:17:43,764 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-07 23:17:43,764 | INFO | MainThread | Random mood switching enabled.
+2026-05-07 23:17:43,764 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-07 23:17:52,303 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:18:02,049 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-07 23:18:10,588 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-07 23:19:06,420 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:19:59,944 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:20:00,680 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:20:29,495 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-07 23:20:43,315 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:23:35,351 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:23:35,456 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:23:35,463 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-07 23:23:35,463 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-07 23:23:35,464 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-07 23:23:35,464 | INFO | MainThread | Random mood switching enabled.
+2026-05-07 23:23:35,464 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-07 23:23:37,235 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:23:38,439 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:23:54,962 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:24:05,532 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:24:19,305 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:24:20,778 | WARNING | Dummy-2 | Chat request failed; falling back to IDLE.
+Traceback (most recent call last):
+  File "d:\githubs\CodingPet\chat_thread.py", line 29, in run
+    reply = generate_chat_reply(self._config, self._user_text, screenshot_base64)
+  File "d:\githubs\CodingPet\llm_client.py", line 34, in generate_chat_reply
+    response = client.chat.completions.create(
+        model=config.llm.chat_model_name,
+    ...<14 lines>...
+        ],
+    )
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_utils\_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 1211, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/chat/completions",
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+        stream_cls=Stream[ChatCompletionChunk],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_base_client.py", line 1314, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_base_client.py", line 1087, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.NotFoundError: Error code: 404 - {'error': {'code': '404', 'message': 'No endpoints found that support image input', 'param': '', 'type': ''}}
+2026-05-07 23:24:52,614 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-07 23:25:01,715 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:25:01,816 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:25:01,820 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-07 23:25:01,820 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-07 23:25:01,820 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-07 23:25:01,820 | INFO | MainThread | Random mood switching enabled.
+2026-05-07 23:25:01,821 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-07 23:25:03,830 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:25:04,474 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:25:12,052 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:25:13,330 | WARNING | Dummy-2 | Chat request failed; falling back to IDLE.
+Traceback (most recent call last):
+  File "d:\githubs\CodingPet\chat_thread.py", line 29, in run
+    reply = generate_chat_reply(self._config, self._user_text, screenshot_base64)
+  File "d:\githubs\CodingPet\llm_client.py", line 34, in generate_chat_reply
+    response = client.chat.completions.create(
+        model=config.llm.chat_model_name,
+    ...<14 lines>...
+        ],
+    )
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_utils\_utils.py", line 287, in wrapper
+    return func(*args, **kwargs)
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\resources\chat\completions\completions.py", line 1211, in create
+    return self._post(
+           ~~~~~~~~~~^
+        "/chat/completions",
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<47 lines>...
+        stream_cls=Stream[ChatCompletionChunk],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_base_client.py", line 1314, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\githubs\CodingPet\.venv\Lib\site-packages\openai\_base_client.py", line 1087, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.NotFoundError: Error code: 404 - {'error': {'code': '404', 'message': 'No endpoints found that support image input', 'param': '', 'type': ''}}
+2026-05-07 23:25:32,058 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-07 23:25:51,493 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-07 23:26:23,597 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-07 23:26:32,240 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-07 23:27:18,188 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:27:31,008 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:27:57,478 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-07 23:29:46,379 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:29:46,476 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:29:46,480 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-07 23:29:46,480 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-07 23:29:46,481 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-07 23:29:46,481 | INFO | MainThread | Random mood switching enabled.
+2026-05-07 23:29:46,481 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-07 23:29:47,636 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:29:48,440 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:29:56,648 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:30:33,271 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-07 23:30:48,663 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-07 23:31:38,131 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-07 23:32:31,757 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-07 23:33:46,324 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:34:21,335 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:34:49,474 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\reviewing
+2026-05-07 23:34:56,223 | INFO | Dummy-1 | Observer produced a proactive comment for window: main.py - 无标题 (工作区) - Visual Studio Code
+2026-05-07 23:35:26,135 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-07 23:36:16,051 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:36:16,154 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:36:16,158 | INFO | MainThread | Phase 1 Success: transparent pet window ready.
+2026-05-07 23:36:16,158 | INFO | MainThread | Phase 2 Success: interactive chat flow wired.
+2026-05-07 23:36:16,158 | INFO | MainThread | Phase 3 Success: observer monitoring started.
+2026-05-07 23:36:16,159 | INFO | MainThread | Random mood switching enabled.
+2026-05-07 23:36:16,159 | INFO | Dummy-1 | Phase 3 Success: observer thread armed.
+2026-05-07 23:36:17,241 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:36:18,004 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:36:26,141 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:36:30,947 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\reviewing
+2026-05-07 23:37:10,059 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-07 23:38:10,704 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-07 23:39:33,350 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:39:52,697 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-07 23:40:06,291 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-07 23:40:24,931 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-07 23:40:44,240 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-07 23:41:24,887 | INFO | Dummy-1 | Observer produced a proactive comment for window: main.py - 无标题 (工作区) - Visual Studio Code
+2026-05-07 23:45:37,638 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-07 23:45:37,738 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-07 23:45:37,743 | INFO | MainThread | 阶段 1 成功：透明宠物窗口已就绪。
+2026-05-07 23:45:37,743 | INFO | MainThread | 阶段 2 成功：交互聊天链路已接好。
+2026-05-07 23:45:37,744 | INFO | MainThread | 阶段 3 成功：观察线程已启动。
+2026-05-07 23:45:37,744 | INFO | MainThread | 随机心情切换已启用。
+2026-05-07 23:45:37,745 | INFO | Dummy-1 | 阶段 3 成功：观察线程已就绪。
+2026-05-07 23:45:38,746 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-07 23:45:39,524 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-07 23:45:46,227 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-07 23:46:01,050 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\reviewing
+2026-05-07 23:46:22,074 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding
+2026-05-07 23:47:01,358 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-07 23:47:25,882 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-07 23:48:15,791 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-07 23:48:33,805 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored

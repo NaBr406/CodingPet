@@ -202,7 +202,7 @@ class ChatInputWidget(QWidget):
         self._anchor_rect = QRect()
 
         self._line_edit = QLineEdit(self)
-        self._line_edit.setPlaceholderText("Say something...")
+        self._line_edit.setPlaceholderText("说点什么吧...")
         self._line_edit.returnPressed.connect(self._emit_submission)
         self._line_edit.installEventFilter(self)
         self._line_edit.setStyleSheet(
@@ -719,8 +719,8 @@ def run_preview(config_path: str = "config.yaml") -> int:
     app = QApplication(sys.argv)
     window = PetWindow(config)
     window.show()
-    window.show_message("Phase 1 Success", 2500)
-    logger.info("Phase 1 Success: transparent pet window ready.")
+    window.show_message("阶段 1 成功", 2500)
+    logger.info("阶段 1 成功：透明宠物窗口已就绪。")
     return app.exec()
 
 

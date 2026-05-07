@@ -45,10 +45,10 @@ class CodingPetController(QObject):
     def start(self) -> None:
         self.window.show()
         self.window.set_state(PetState.GREETING)
-        self.window.show_message("Double-click me when your code starts drifting.", 2800)
+        self.window.show_message("双击我对话", 2800)
 
-        self._logger.info("Phase 1 Success: transparent pet window ready.")
-        self._logger.info("Phase 2 Success: interactive chat flow wired.")
+        self._logger.info("阶段 1 成功：透明宠物窗口已就绪。")
+        self._logger.info("阶段 2 成功：交互聊天链路已接好。")
 
         if self._config.observer.enabled:
             self._observer_worker = ObserverWorker(self._config)
@@ -56,13 +56,13 @@ class CodingPetController(QObject):
             self._observer_worker.observation_failed.connect(self._handle_observation_finished_without_reply)
             self._observer_worker.observation_ready.connect(self._handle_model_reply)
             self._observer_worker.start()
-            self._logger.info("Phase 3 Success: observer monitoring started.")
+            self._logger.info("阶段 3 成功：观察线程已启动。")
         else:
-            self._logger.info("Phase 3 Success: observer monitoring disabled by config.")
+            self._logger.info("阶段 3 已关闭：配置里禁用了观察线程。")
 
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
-            self._logger.info("Random mood switching enabled.")
+            self._logger.info("随机心情切换已启用。")
 
     def shutdown(self) -> None:
         if self._observer_worker is not None:
@@ -76,11 +76,11 @@ class CodingPetController(QObject):
 
     def _start_chat(self, text: str) -> None:
         if self._chat_worker is not None and self._chat_worker.isRunning():
-            self.window.show_message("One thread at a time. I am not your race condition.")
+            self.window.show_message("一次只处理一个请求，别把我当竞态条件。")
             return
 
         self.window.set_state(PetState.THINKING)
-        self.window.show_message("Thinking...", 1600)
+        self.window.show_message("我想一下...", 1600)
         self._interaction_busy = True
         self._manual_override_active = False
         self._random_mood_timer.stop()
@@ -194,7 +194,7 @@ def main() -> int:
     try:
         config = load_config()
     except ConfigError:
-        logger.exception("Failed to load config.yaml.")
+        logger.exception("加载 config.yaml 失败。")
         return 1
 
     app = QApplication(sys.argv)
