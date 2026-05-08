@@ -32,7 +32,6 @@ class ObserverWorker(QThread):
         logger = logging.getLogger(LOGGER_NAME)
         logger.info("阶段 3 成功：观察线程已就绪。")
 
-        self._sleep_interruptibly(self._interval_ms)
         while self._running:
             try:
                 self._observe_once()
@@ -50,11 +49,17 @@ class ObserverWorker(QThread):
         if not title:
             title = str(gw.getActiveWindowTitle() or "")
 
-        if not title or not self._is_ide_window(title):
+        if not title:
+            logger.info("观察线程跳过：当前没有可识别的活动窗口标题。")
             return
 
-        screenshot_base64 = self._capture_active_region(active_window)
+        if not self._is_ide_window(title):
+            logger.info("观察线程跳过：当前窗口不是配置中的 IDE：%s", title)
+            return
+
         self.observation_started.emit()
+        logger.info("观察线程命中 IDE 窗口，准备截图并请求视觉模型：%s", title)
+        screenshot_base64 = self._capture_active_region(active_window)
         reply = analyze_screenshot(self._config, screenshot_base64, title)
         logger.info("观察线程已为窗口生成主动评论：%s", title)
         self.observation_ready.emit(reply.message, reply.emotion.value)

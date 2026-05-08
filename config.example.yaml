@@ -1,0 +1,30 @@
+llm:
+  base_url: "https://token-plan-cn.xiaomimimo.com/v1"
+  api_key: ""
+  vision_model_name: "mimo-v2.5"
+  chat_model_name: "mimo-v2.5-pro"
+
+pet_preset:
+  personality_prompt: "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
+
+observer:
+  # 是否开启全局观测：开启后会定时检查 IDE 窗口，也会在主动聊天时附带当前屏幕截图。
+  global_observation_enabled: true
+  interval_seconds: 300
+  ide_keywords:
+    - "Code"
+    - "Cursor"
+    - "IDEA"
+    - "PyCharm"
+    - "Visual Studio"
+
+runtime:
+  request_timeout_seconds: 20
+  message_duration_ms: 7000
+  state_reset_ms: 6000
+  random_mood_enabled: true
+  random_mood_min_seconds: 8
+  random_mood_max_seconds: 20
+  sprite_size: 300
+  sprite_min_size: 160
+  sprite_max_size: 560

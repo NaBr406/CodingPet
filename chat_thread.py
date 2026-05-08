@@ -25,7 +25,9 @@ class ChatWorker(QThread):
     def run(self) -> None:
         logger = logging.getLogger(LOGGER_NAME)
         try:
-            screenshot_base64 = self._capture_screen()
+            screenshot_base64 = None
+            if self._config.observer.global_observation_enabled:
+                screenshot_base64 = self._capture_screen()
             reply = generate_chat_reply(self._config, self._user_text, screenshot_base64)
         except Exception:
             logger.warning("主动聊天请求失败，已回退到 IDLE。", exc_info=True)

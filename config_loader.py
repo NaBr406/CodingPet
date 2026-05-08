@@ -26,7 +26,7 @@ class PetPresetConfig:
 
 @dataclass(frozen=True)
 class ObserverConfig:
-    enabled: bool
+    global_observation_enabled: bool
     interval_seconds: int
     ide_keywords: tuple[str, ...]
 
@@ -81,7 +81,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         personality_prompt=_require_str(preset_raw, "pet_preset.personality_prompt"),
     )
     observer = ObserverConfig(
-        enabled=bool(observer_raw.get("enabled", True)),
+        global_observation_enabled=_observer_enabled(observer_raw),
         interval_seconds=max(5, int(observer_raw.get("interval_seconds", 300))),
         ide_keywords=tuple(_string_list(observer_raw.get("ide_keywords"), default=[
             "Code",
@@ -140,3 +140,23 @@ def _string_list(value: Any, default: list[str]) -> list[str]:
         raise ConfigError("observer.ide_keywords must be a list of strings")
     normalized = [item.strip() for item in value if isinstance(item, str) and item.strip()]
     return normalized or default
+
+
+def _observer_enabled(observer_raw: dict[str, Any]) -> bool:
+    if "global_observation_enabled" in observer_raw:
+        return _bool_value(observer_raw["global_observation_enabled"], "observer.global_observation_enabled")
+    return _bool_value(observer_raw.get("enabled", True), "observer.enabled")
+
+
+def _bool_value(value: Any, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "on", "1"}:
+            return True
+        if lowered in {"false", "no", "off", "0"}:
+            return False
+    raise ConfigError(f"Invalid boolean config value: {field_name}")

@@ -50,15 +50,15 @@ class CodingPetController(QObject):
         self._logger.info("阶段 1 成功：透明宠物窗口已就绪。")
         self._logger.info("阶段 2 成功：交互聊天链路已接好。")
 
-        if self._config.observer.enabled:
+        if self._config.observer.global_observation_enabled:
             self._observer_worker = ObserverWorker(self._config)
             self._observer_worker.observation_started.connect(self._handle_observation_started)
             self._observer_worker.observation_failed.connect(self._handle_observation_finished_without_reply)
             self._observer_worker.observation_ready.connect(self._handle_model_reply)
             self._observer_worker.start()
-            self._logger.info("阶段 3 成功：观察线程已启动。")
+            self._logger.info("阶段 3 成功：全局观测线程已启动。")
         else:
-            self._logger.info("阶段 3 已关闭：配置里禁用了观察线程。")
+            self._logger.info("阶段 3 已关闭：配置里禁用了全局观测。")
 
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()

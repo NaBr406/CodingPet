@@ -957,3 +957,22 @@ openai.NotFoundError: Error code: 404 - {'error': {'code': '404', 'message': 'No
 2026-05-07 23:47:25,882 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
 2026-05-07 23:48:15,791 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
 2026-05-07 23:48:33,805 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-08 12:34:29,201 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\idle
+2026-05-08 12:34:29,423 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\greeting
+2026-05-08 12:34:29,431 | INFO | MainThread | 阶段 1 成功：透明宠物窗口已就绪。
+2026-05-08 12:34:29,431 | INFO | MainThread | 阶段 2 成功：交互聊天链路已接好。
+2026-05-08 12:34:29,432 | INFO | MainThread | 阶段 3 成功：全局观测线程已启动。
+2026-05-08 12:34:29,432 | INFO | MainThread | 随机心情切换已启用。
+2026-05-08 12:34:29,432 | INFO | Dummy-1 | 阶段 3 成功：观察线程已就绪。
+2026-05-08 12:34:33,394 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\dragging
+2026-05-08 12:35:02,581 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\listening
+2026-05-08 12:35:06,822 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\thinking
+2026-05-08 12:35:16,567 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\reviewing
+2026-05-08 12:35:49,585 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\happy
+2026-05-08 12:36:08,086 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\confused
+2026-05-08 12:36:16,518 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\sleepy
+2026-05-08 12:36:38,616 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\proud
+2026-05-08 12:37:37,546 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\surprised
+2026-05-08 12:39:44,033 | INFO | Dummy-1 | 观察线程已为窗口生成主动评论：● config.yaml - 无标题 (工作区) - Visual Studio Code
+2026-05-08 12:40:58,011 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\bored
+2026-05-08 12:41:16,208 | INFO | MainThread | Loaded 32 animation frames from D:\githubs\CodingPet\assets\coding
