@@ -5,14 +5,16 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = PROJECT_DIR / "assets"
 REFERENCE_DIR = ASSETS_DIR / "reference"
 FRAME_COUNT = 32
-CANVAS_SIZE = 512
+BASE_CANVAS_SIZE = 512
+DEFAULT_CANVAS_SIZE = 1024
+DEFAULT_CLARITY = 1.15
 SOURCE_SIZE = 1024
 
 
@@ -77,14 +79,31 @@ def main() -> int:
         action="store_true",
         help="Also encode frame_*.webp files. PNG frames are the runtime default.",
     )
+    parser.add_argument(
+        "--canvas-size",
+        type=int,
+        default=DEFAULT_CANVAS_SIZE,
+        help=f"Square output canvas size. Defaults to {DEFAULT_CANVAS_SIZE}px.",
+    )
+    parser.add_argument(
+        "--clarity",
+        type=float,
+        default=DEFAULT_CLARITY,
+        help=(
+            "Alpha-safe clarity pass strength for final display frames. "
+            "Use 0 to disable."
+        ),
+    )
     args = parser.parse_args()
+    canvas_size = max(BASE_CANVAS_SIZE, args.canvas_size)
+    clarity = max(0.0, args.clarity)
 
     sources = load_state_sources(args.sheet, args.reference_name)
 
     for state in STATE_ORDER:
         source = sources[state]
-        write_state_source(state, source)
-        write_state_frames(state, source, write_webp=args.with_webp_frames)
+        write_state_source(state, source, canvas_size, clarity)
+        write_state_frames(state, source, canvas_size, clarity, write_webp=args.with_webp_frames)
 
     if args.sheet is not None:
         reference_path = (REFERENCE_DIR / args.reference_name).resolve()
@@ -189,23 +208,30 @@ def despill_green(image: Image.Image) -> Image.Image:
     return image
 
 
-def write_state_source(state: str, source: Image.Image) -> None:
+def write_state_source(state: str, source: Image.Image, canvas_size: int, clarity: float) -> None:
     source_dir = ASSETS_DIR / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
     source.save(source_dir / f"{state}_source.png")
 
-    display = source_to_canvas(source)
+    display = clarify_frame(source_to_canvas(source, canvas_size), clarity)
     display.save(ASSETS_DIR / f"{state}.png")
     display.save(ASSETS_DIR / f"{state}.webp", "WEBP", lossless=True, quality=100, method=6)
 
 
-def write_state_frames(state: str, source: Image.Image, *, write_webp: bool = False) -> None:
+def write_state_frames(
+    state: str,
+    source: Image.Image,
+    canvas_size: int,
+    clarity: float,
+    *,
+    write_webp: bool = False,
+) -> None:
     state_dir = ASSETS_DIR / state
     state_dir.mkdir(parents=True, exist_ok=True)
-    base = source_to_canvas(source)
+    base = source_to_canvas(source, canvas_size)
 
     for index in range(FRAME_COUNT):
-        frame = build_motion_frame(state, base, index)
+        frame = clarify_frame(build_motion_frame(state, base, index), clarity)
         png_path = state_dir / f"frame_{index:02d}.png"
         frame.save(png_path)
         if write_webp:
@@ -213,20 +239,71 @@ def write_state_frames(state: str, source: Image.Image, *, write_webp: bool = Fa
             frame.save(webp_path, "WEBP", lossless=False, quality=92, method=0)
 
 
-def source_to_canvas(source: Image.Image) -> Image.Image:
+def source_to_canvas(source: Image.Image, canvas_size: int) -> Image.Image:
     source = source.convert("RGBA")
-    if source.size == (CANVAS_SIZE, CANVAS_SIZE):
+    if source.size == (canvas_size, canvas_size):
         return source
-    return source.resize((CANVAS_SIZE, CANVAS_SIZE), Image.Resampling.LANCZOS)
+    return source.resize((canvas_size, canvas_size), Image.Resampling.LANCZOS)
 
 
 def build_motion_frame(state: str, base: Image.Image, index: int) -> Image.Image:
     timeline = index / FRAME_COUNT
-    pose = choreograph_pose(state, timeline)
+    motion_scale = base.width / BASE_CANVAS_SIZE
+    pose = scale_pose(choreograph_pose(state, timeline), motion_scale)
     posed = apply_anchored_scale(base, pose)
     if abs(pose.lean_px) >= 0.05:
         posed = apply_same_layer_lean(posed, pose.lean_px)
     return clear_corner_alpha(posed)
+
+
+def scale_pose(pose: RasterPose, factor: float) -> RasterPose:
+    return RasterPose(
+        x_offset=pose.x_offset * factor,
+        y_offset=pose.y_offset * factor,
+        scale_x=pose.scale_x,
+        scale_y=pose.scale_y,
+        lean_px=pose.lean_px * factor,
+    )
+
+
+def clarify_frame(image: Image.Image, strength: float) -> Image.Image:
+    if strength <= 0:
+        return image
+
+    rgba = image.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox is None:
+        return rgba
+
+    # Keep the antialiased alpha edge stable while increasing detail inside the
+    # opaque painted body. This avoids the pale/dark fringe that straight RGBA
+    # sharpening can create around transparent sprites.
+    box = expand_box(bbox, rgba.size, round(18 * rgba.width / BASE_CANVAS_SIZE))
+    rgb = rgba.convert("RGB")
+    original = rgb.crop(box)
+    local_alpha = alpha.crop(box)
+
+    radius = max(0.55, 0.75 * rgba.width / DEFAULT_CANVAS_SIZE)
+    percent = round(190 * strength)
+    sharpened = original.filter(
+        ImageFilter.UnsharpMask(radius=radius, percent=percent, threshold=2)
+    )
+    sharpened = ImageEnhance.Sharpness(sharpened).enhance(1.0 + 0.16 * strength)
+    sharpened = ImageEnhance.Contrast(sharpened).enhance(1.0 + 0.045 * strength)
+
+    detail_mask = local_alpha.point(
+        lambda value: 0
+        if value < 96
+        else 255
+        if value >= 224
+        else round((value - 96) * 255 / 128)
+    )
+    blended = Image.composite(sharpened, original, detail_mask)
+
+    output_rgb = rgb.copy()
+    output_rgb.paste(blended, box)
+    return Image.merge("RGBA", (*output_rgb.split(), alpha))
 
 
 def choreograph_pose(state: str, timeline: float) -> RasterPose:
@@ -433,12 +510,13 @@ def clear_corner_alpha(image: Image.Image) -> Image.Image:
     rgba = image.copy()
     alpha = rgba.getchannel("A")
     width, height = alpha.size
-    empty_corner = Image.new("L", (8, 8), 0)
+    corner_size = max(8, round(8 * width / BASE_CANVAS_SIZE))
+    empty_corner = Image.new("L", (corner_size, corner_size), 0)
     for box in (
-        (0, 0, 8, 8),
-        (width - 8, 0, width, 8),
-        (0, height - 8, 8, height),
-        (width - 8, height - 8, width, height),
+        (0, 0, corner_size, corner_size),
+        (width - corner_size, 0, width, corner_size),
+        (0, height - corner_size, corner_size, height),
+        (width - corner_size, height - corner_size, width, height),
     ):
         alpha.paste(empty_corner, box)
     rgba.putalpha(alpha)

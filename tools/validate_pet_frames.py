@@ -16,6 +16,7 @@ from pet_state import PetState
 MIN_FRAME_COUNT = 24
 MIN_CHANGED_FRAMES = 8
 MIN_VISIBLE_PIXELS = 2000
+BASE_CANVAS_SIZE = 512
 MAX_CENTER_DRIFT = 24
 MAX_FRAME_CENTER_STEP = 9
 CORNER_SIZE = 8
@@ -36,8 +37,16 @@ def main() -> int:
         for frame_path in frames:
             with Image.open(frame_path) as image:
                 rgba = image.convert("RGBA")
+            width, height = rgba.size
+            if width != height:
+                failures.append(f"{state.value}/{frame_path.name}: expected square frame, found {width}x{height}")
             if first_frame is None:
                 first_frame = rgba
+                expected_size = rgba.size
+            elif rgba.size != expected_size:
+                failures.append(
+                    f"{state.value}/{frame_path.name}: size {rgba.size} differs from first frame {expected_size}"
+                )
             elif ImageChops.difference(first_frame, rgba).getbbox() is not None:
                 changed_frames += 1
 
@@ -58,17 +67,18 @@ def main() -> int:
             centers.append(((left + right) / 2, (top + bottom) / 2))
 
         if centers:
+            frame_scale = first_frame.width / BASE_CANVAS_SIZE if first_frame is not None else 1.0
             avg_x = sum(x for x, _ in centers) / len(centers)
             avg_y = sum(y for _, y in centers) / len(centers)
             max_drift = max(abs(x - avg_x) + abs(y - avg_y) for x, y in centers)
-            if max_drift > MAX_CENTER_DRIFT:
+            if max_drift > MAX_CENTER_DRIFT * frame_scale:
                 failures.append(f"{state.value}: frame center drift too high ({max_drift:.1f})")
 
             max_step = max(
                 abs(x - last_x) + abs(y - last_y)
                 for (last_x, last_y), (x, y) in zip(centers, centers[1:])
             )
-            if max_step > MAX_FRAME_CENTER_STEP:
+            if max_step > MAX_FRAME_CENTER_STEP * frame_scale:
                 failures.append(f"{state.value}: frame-to-frame center jump too high ({max_step:.1f})")
 
             if changed_frames < MIN_CHANGED_FRAMES:
@@ -87,11 +97,12 @@ def main() -> int:
 
 def corners_are_transparent(alpha: Image.Image) -> bool:
     width, height = alpha.size
+    corner_size = max(CORNER_SIZE, round(CORNER_SIZE * width / BASE_CANVAS_SIZE))
     corners = (
-        (0, 0, CORNER_SIZE, CORNER_SIZE),
-        (width - CORNER_SIZE, 0, width, CORNER_SIZE),
-        (0, height - CORNER_SIZE, CORNER_SIZE, height),
-        (width - CORNER_SIZE, height - CORNER_SIZE, width, height),
+        (0, 0, corner_size, corner_size),
+        (width - corner_size, 0, width, corner_size),
+        (0, height - corner_size, corner_size, height),
+        (width - corner_size, height - corner_size, width, height),
     )
     for box in corners:
         if count_alpha_values(alpha.crop(box), threshold=0) > 0:

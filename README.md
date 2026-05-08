@@ -153,7 +153,7 @@ runtime:
 .\.venv\Scripts\python.exe tools\preview_pet_frames.py
 ```
 
-从 `assets/source/*_source.png` 重建所有状态的 512x512 固定画布 PNG 动画帧：
+从 `assets/source/*_source.png` 重建所有状态的 1024x1024 固定画布 PNG 动画帧：
 
 ```powershell
 .\.venv\Scripts\python.exe tools\rebuild_pet_actions.py
@@ -166,6 +166,7 @@ runtime:
 ```
 
 默认运行时优先使用 PNG 帧，以减少透明边缘残影和压缩光晕。只有明确需要 WebP 帧时再加 `--with-webp-frames`。
+重建脚本默认会对最终展示帧做一层透明边保护的清晰化处理；如果想查看完全未锐化的版本，可以加 `--clarity 0`。
 
 ## 开发检查
 
