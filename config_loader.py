@@ -32,6 +32,16 @@ class ObserverConfig:
 
 
 @dataclass(frozen=True)
+class CoreSettings:
+    base_url: str
+    api_key: str
+    vision_model_name: str
+    chat_model_name: str
+    global_observation_enabled: bool
+    interval_seconds: int
+
+
+@dataclass(frozen=True)
 class RuntimeConfig:
     request_timeout_seconds: float
     message_duration_ms: int
@@ -116,10 +126,61 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
     )
 
 
+def core_settings_from_config(config: AppConfig) -> CoreSettings:
+    return CoreSettings(
+        base_url=config.llm.base_url,
+        api_key=config.llm.api_key,
+        vision_model_name=config.llm.vision_model_name,
+        chat_model_name=config.llm.chat_model_name,
+        global_observation_enabled=config.observer.global_observation_enabled,
+        interval_seconds=config.observer.interval_seconds,
+    )
+
+
+def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
+    config_path = Path(path).expanduser().resolve()
+    if not config_path.exists():
+        raise ConfigError(f"Config file not found: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    if not isinstance(raw, dict):
+        raise ConfigError("Config file root must be a mapping")
+
+    llm_raw = _ensure_section(raw, "llm")
+    observer_raw = _ensure_section(raw, "observer")
+
+    base_url = _clean_required_text(settings.base_url, "llm.base_url")
+    vision_model_name = _clean_required_text(settings.vision_model_name, "llm.vision_model_name")
+    chat_model_name = _clean_required_text(settings.chat_model_name, "llm.chat_model_name")
+    api_key = settings.api_key.strip()
+    interval_seconds = max(5, int(settings.interval_seconds))
+
+    llm_raw["base_url"] = base_url
+    llm_raw["api_key"] = api_key
+    llm_raw["vision_model_name"] = vision_model_name
+    llm_raw["chat_model_name"] = chat_model_name
+    observer_raw["global_observation_enabled"] = bool(settings.global_observation_enabled)
+    observer_raw["interval_seconds"] = interval_seconds
+
+    with config_path.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(raw, handle, allow_unicode=True, sort_keys=False)
+
+
 def _read_section(raw: dict[str, Any], section_name: str) -> dict[str, Any]:
     section = raw.get(section_name)
     if not isinstance(section, dict):
         raise ConfigError(f"Missing config section: {section_name}")
+    return section
+
+
+def _ensure_section(raw: dict[str, Any], section_name: str) -> dict[str, Any]:
+    section = raw.get(section_name)
+    if section is None:
+        section = {}
+        raw[section_name] = section
+    if not isinstance(section, dict):
+        raise ConfigError(f"Invalid config section: {section_name}")
     return section
 
 
@@ -131,6 +192,13 @@ def _require_str(section: dict[str, Any], field_name: str, allow_empty: bool = F
     if not allow_empty and not value.strip():
         raise ConfigError(f"Empty config value: {field_name}")
     return value.strip()
+
+
+def _clean_required_text(value: str, field_name: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ConfigError(f"Empty config value: {field_name}")
+    return normalized
 
 
 def _string_list(value: Any, default: list[str]) -> list[str]:

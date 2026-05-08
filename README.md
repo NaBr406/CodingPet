@@ -1,6 +1,6 @@
 # CodingPet
 
-CodingPet 是一个悬浮在桌面上的编程伙伴。它使用 PyQt6 渲染透明、置顶、可拖拽缩放的桌面宠物，通过 OpenAI 兼容的 Chat Completions 接口进行对话，也可以周期性观察当前 IDE 窗口并给出简短代码评论。
+CodingPet 是一个悬浮在桌面上的编程伙伴。它使用 PyQt6 渲染透明、置顶、可拖拽缩放的桌面宠物，通过 OpenAI 兼容的 Chat Completions 接口进行对话，也可以周期性观察当前前台窗口并给出简短评论。
 
 ![CodingPet animation preview](assets/reference/animation-preview.gif)
 
@@ -9,8 +9,8 @@ CodingPet 是一个悬浮在桌面上的编程伙伴。它使用 PyQt6 渲染透
 - 透明置顶桌面宠物窗口，默认停靠在屏幕右下角。
 - 15 种状态动画：`idle`、`greeting`、`listening`、`reviewing`、`dragging`、`resizing`、`thinking`、`angry`、`happy`、`coding`、`sleepy`、`confused`、`surprised`、`proud`、`bored`。
 - 每个状态优先加载 `assets/<state>/frame_*.png` 动画帧，当前素材为每个状态 32 帧；缺失时会回退到对应静态图。
-- 双击宠物打开输入框，发送消息时会尽量附带当前屏幕截图，让模型结合代码、报错或 IDE 状态回答。
-- 可配置的后台观察线程会识别活动窗口标题中的 IDE 关键词，截取活动窗口并调用视觉模型主动评论。
+- 双击宠物打开输入框，发送消息时会尽量附带当前屏幕截图，让模型结合代码、报错或前台窗口状态回答。
+- 可配置的后台观察线程会按间隔截取当前前台窗口，并调用视觉模型主动评论。
 - 支持随机心情切换，聊天、观察、拖动和缩放时会自动暂停随机切换。
 - 支持像普通窗口一样从边缘或角落拖动缩放，也支持鼠标滚轮调整大小。
 
@@ -54,14 +54,8 @@ pet_preset:
   personality_prompt: "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
 
 observer:
-  enabled: true
+  global_observation_enabled: true
   interval_seconds: 300
-  ide_keywords:
-    - "Code"
-    - "Cursor"
-    - "IDEA"
-    - "PyCharm"
-    - "Visual Studio"
 
 runtime:
   request_timeout_seconds: 20
@@ -88,6 +82,7 @@ runtime:
 - 输入框中按 `Esc` 或失去焦点：取消输入。
 - 左键拖动宠物中间区域：移动窗口。
 - 左键拖动边缘或角落：按普通窗口方式缩放。
+- 右键短按宠物：打开菜单，可进入设置。
 - 右键拖动宠物：缩放。
 - 鼠标滚轮：放大或缩小宠物。
 
@@ -114,9 +109,9 @@ runtime:
 
 `observer`：
 
-- `enabled`：是否开启后台观察。
+- `global_observation_enabled`：是否开启后台观察；开启后会按间隔观察当前前台窗口，不按窗口标题过滤。读取配置时仍兼容旧的 `enabled`。
 - `interval_seconds`：观察间隔，代码中最小值为 5 秒。
-- `ide_keywords`：活动窗口标题包含这些关键词时，观察线程才会截图并请求模型。
+- `ide_keywords`：旧配置兼容字段，当前全局观察不会用它跳过窗口。
 
 `runtime`：
 
@@ -133,9 +128,10 @@ runtime:
 .
 ├── main.py                 # 应用入口和状态调度
 ├── ui_core.py              # PyQt 透明窗口、动画、气泡、输入框、拖拽缩放
+├── settings_dialog.py      # 蓝白设置弹窗和核心配置表单
 ├── llm_client.py           # OpenAI 兼容接口调用和模型回复解析
 ├── chat_thread.py          # 主动聊天线程，包含屏幕截图
-├── observer_thread.py      # IDE 活动窗口观察线程
+├── observer_thread.py      # 前台窗口观察线程
 ├── config_loader.py        # config.yaml 加载和默认值约束
 ├── pet_state.py            # 宠物状态枚举和情绪映射
 ├── logging_utils.py        # 控制台和 codingpet.log 日志
@@ -196,5 +192,5 @@ runtime:
 - 运行日志会同时输出到控制台和 `codingpet.log`。
 - 如果启动后立即退出，优先检查 `config.yaml` 是否存在，以及 `llm.base_url`、`llm.api_key`、模型名是否填写。
 - 如果聊天可用但截图相关请求失败，确认 `vision_model_name` 对应模型支持 `image_url` 输入。
-- 如果观察线程没有主动评论，确认当前活动窗口标题包含 `observer.ide_keywords` 中的关键词。
+- 如果观察线程没有主动评论，确认 `observer.global_observation_enabled` 已开启、`interval_seconds` 不过长，并检查视觉模型请求日志。
 - 如果动画出现漂移、边缘光晕或残影，先运行 `tools\validate_pet_frames.py`，并确认状态帧仍是固定画布 PNG。

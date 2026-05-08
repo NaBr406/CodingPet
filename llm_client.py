@@ -70,7 +70,7 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
             {
                 "role": "system",
                 "content": (
-                    "你是 CodingPet，一个安静观察代码的桌面编程伙伴。"
+                    "你是 CodingPet，一个安静观察前台窗口的桌面编程伙伴。"
                     f"请始终保持人设：{config.pet_preset.personality_prompt}。"
                     "请分析截图，判断用户正在做什么，并主动给出简短评价。"
                     "请严格只输出一行，格式必须是：[STATE] 一句简短吐槽或建议。"
@@ -84,7 +84,7 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
                     {
                         "type": "text",
                         "text": (
-                            "请分析这张截图里的代码或 IDE 状态。"
+                            "请分析这张截图里的当前前台窗口内容。"
                             f"当前活动窗口标题：{window_title}。"
                             "请用人设说一句简短的主动评论。"
                         ),

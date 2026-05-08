@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QEvent, QPoint, QRect, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QMouseEvent, QPainter, QPainterPath, QPixmap, QWheelEvent
-from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QMenu, QVBoxLayout, QWidget
 
 from config_loader import AppConfig, load_config
 from logging_utils import LOGGER_NAME, setup_logging
@@ -32,6 +32,7 @@ RESIZE_LEFT = 1
 RESIZE_TOP = 2
 RESIZE_RIGHT = 4
 RESIZE_BOTTOM = 8
+RIGHT_CLICK_DRAG_THRESHOLD = 6
 STATE_ANIMATION_FRAME_MS = {
     PetState.IDLE: 90,
     PetState.GREETING: 66,
@@ -287,10 +288,13 @@ class PetSpriteLabel(QLabel):
     resize_released = pyqtSignal(object)
     wheel_scaled = pyqtSignal(int)
     double_clicked = pyqtSignal()
+    context_requested = pyqtSignal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._sprite_pixmap = QPixmap()
+        self._right_press_pos: QPoint | None = None
+        self._right_resize_active = False
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAutoFillBackground(False)
 
@@ -318,19 +322,42 @@ class PetSpriteLabel(QLabel):
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_pressed.emit(event)
         elif event.button() == Qt.MouseButton.RightButton:
-            self.resize_pressed.emit(event)
+            self._right_press_pos = event.globalPosition().toPoint()
+            self._right_resize_active = False
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if event.buttons() & Qt.MouseButton.RightButton:
+            if self._right_press_pos is not None:
+                delta = event.globalPosition().toPoint() - self._right_press_pos
+                if (
+                    not self._right_resize_active
+                    and delta.manhattanLength() >= RIGHT_CLICK_DRAG_THRESHOLD
+                ):
+                    self._right_resize_active = True
+                    self.resize_pressed.emit(event)
+            if self._right_resize_active:
+                self.resize_moved.emit(event)
+            event.accept()
+            return
+
         self.drag_moved.emit(event)
-        self.resize_moved.emit(event)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_released.emit(event)
         elif event.button() == Qt.MouseButton.RightButton:
-            self.resize_released.emit(event)
+            if self._right_resize_active:
+                self.resize_released.emit(event)
+            else:
+                self.context_requested.emit(event.globalPosition().toPoint())
+            self._right_press_pos = None
+            self._right_resize_active = False
+            event.accept()
+            return
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
@@ -351,6 +378,7 @@ class PetWindow(QWidget):
     drag_finished = pyqtSignal()
     resize_started = pyqtSignal()
     resize_finished = pyqtSignal()
+    settings_requested = pyqtSignal()
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__(None, WINDOW_FLAGS)
@@ -388,6 +416,7 @@ class PetWindow(QWidget):
         self._sprite.resize_released.connect(self._end_resize)
         self._sprite.wheel_scaled.connect(self._wheel_resize)
         self._sprite.double_clicked.connect(self.show_chat_input)
+        self._sprite.context_requested.connect(self._show_context_menu)
 
         self._chat_input.submitted.connect(self.chat_submitted.emit)
         self._chat_input.cancelled.connect(self.chat_cancelled.emit)
@@ -398,6 +427,12 @@ class PetWindow(QWidget):
 
         self._config.assets_dir.mkdir(parents=True, exist_ok=True)
         self.set_state(PetState.IDLE)
+
+    def update_config(self, config: AppConfig) -> None:
+        self._config = config
+        self._config.assets_dir.mkdir(parents=True, exist_ok=True)
+        self._sprite_size = self._clamp_sprite_size(self._sprite_size)
+        self._apply_animation_frame()
 
     def set_state(self, state: PetState | str) -> None:
         normalized = state if isinstance(state, PetState) else PetState.from_emotion(state)
@@ -445,6 +480,32 @@ class PetWindow(QWidget):
         self._bubble.set_anchor_rect(anchor)
         self._chat_input.set_anchor_rect(anchor)
 
+    def _show_context_menu(self, global_pos: QPoint) -> None:
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background: #ffffff;
+                border: 1px solid #bfd7ff;
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QMenu::item {
+                color: #12345f;
+                padding: 7px 30px 7px 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background: #eaf2ff;
+                color: #1d4ed8;
+            }
+            """
+        )
+        settings_action = menu.addAction("设置")
+        selected_action = menu.exec(global_pos)
+        if selected_action == settings_action:
+            self.settings_requested.emit()
+
     def _start_drag(self, event: QMouseEvent) -> None:
         resize_edges = self._resize_edges_at(event.position().toPoint())
         if resize_edges:
@@ -469,11 +530,14 @@ class PetWindow(QWidget):
     def _end_drag(self, event: QMouseEvent) -> None:
         _ = event
         had_dragging = self._drag_offset is not None
+        had_resize = self._resize_start_pos is not None or self._resize_edges != 0
         self._drag_offset = None
         self._resize_edges = 0
         self._resize_start_pos = None
         self._sprite.setCursor(Qt.CursorShape.OpenHandCursor)
-        if had_dragging:
+        if had_resize:
+            self.resize_finished.emit()
+        elif had_dragging:
             self.drag_finished.emit()
 
     def _start_resize(self, event: QMouseEvent) -> None:
@@ -492,7 +556,7 @@ class PetWindow(QWidget):
         if self._resize_edges:
             self._edge_resize_move(event)
             return
-        if event.buttons() & Qt.MouseButton.RightButton:
+        if self._resize_start_pos is not None and event.buttons() & Qt.MouseButton.RightButton:
             delta = event.globalPosition().toPoint() - self._resize_start_pos
             self._set_sprite_size(self._resize_start_size + max(delta.x(), -delta.y()))
 

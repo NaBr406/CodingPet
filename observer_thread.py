@@ -50,23 +50,14 @@ class ObserverWorker(QThread):
             title = str(gw.getActiveWindowTitle() or "")
 
         if not title:
-            logger.info("观察线程跳过：当前没有可识别的活动窗口标题。")
-            return
-
-        if not self._is_ide_window(title):
-            logger.info("观察线程跳过：当前窗口不是配置中的 IDE：%s", title)
-            return
+            title = "未识别前台窗口"
 
         self.observation_started.emit()
-        logger.info("观察线程命中 IDE 窗口，准备截图并请求视觉模型：%s", title)
+        logger.info("观察线程准备截图并请求视觉模型：%s", title)
         screenshot_base64 = self._capture_active_region(active_window)
         reply = analyze_screenshot(self._config, screenshot_base64, title)
         logger.info("观察线程已为窗口生成主动评论：%s", title)
         self.observation_ready.emit(reply.message, reply.emotion.value)
-
-    def _is_ide_window(self, title: str) -> bool:
-        lowered = title.lower()
-        return any(keyword.lower() in lowered for keyword in self._config.observer.ide_keywords)
 
     def _capture_active_region(self, active_window: object | None) -> str:
         with mss() as screen_capture:
