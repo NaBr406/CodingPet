@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QIntValidator, QPainter, QPen
+from PyQt6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, Qt
+from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
-    QAbstractButton,
     QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QGroupBox,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -27,63 +26,8 @@ INTERVAL_MIN_SECONDS = 5
 INTERVAL_MAX_SECONDS = 86400
 MEMORY_TURNS_MIN = 1
 MEMORY_TURNS_MAX = 20
-
-
-class IntervalStepButton(QAbstractButton):
-    def __init__(self, direction: int, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._direction = 1 if direction > 0 else -1
-        self.setFixedSize(34, 23)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("增加 1 秒" if self._direction > 0 else "减少 1 秒")
-
-    def paintEvent(self, event: object) -> None:
-        _ = event
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        if self.isDown():
-            fill = QColor("#d9ebff")
-            border = QColor("#60a5fa")
-            chevron = QColor("#0f3f8c")
-        elif self.underMouse():
-            fill = QColor("#eef6ff")
-            border = QColor("#93c5fd")
-            chevron = QColor("#1d4ed8")
-        else:
-            fill = QColor("#f7fbff")
-            border = QColor("#bfdbfe")
-            chevron = QColor("#2563eb")
-
-        painter.setPen(QPen(border, 1))
-        painter.setBrush(fill)
-        painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
-
-        pen = QPen(chevron, 1.8)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        painter.setPen(pen)
-
-        center_x = self.width() / 2
-        center_y = self.height() / 2
-        span = 5.0
-        rise = 3.8
-        if self._direction > 0:
-            points = (
-                (center_x - span, center_y + 2),
-                (center_x, center_y - rise),
-                (center_x + span, center_y + 2),
-            )
-        else:
-            points = (
-                (center_x - span, center_y - 2),
-                (center_x, center_y + rise),
-                (center_x + span, center_y - 2),
-            )
-
-        painter.drawLine(int(points[0][0]), int(points[0][1]), int(points[1][0]), int(points[1][1]))
-        painter.drawLine(int(points[1][0]), int(points[1][1]), int(points[2][0]), int(points[2][1]))
+MENU_WIDTH = 148
+MENU_ANIMATION_MS = 180
 
 
 class SettingsDialog(QDialog):
@@ -127,6 +71,9 @@ class SettingsDialog(QDialog):
         self._menu_panel: QWidget | None = None
         self._section_stack: QStackedWidget | None = None
         self._section_buttons: list[QPushButton] = []
+        self._menu_effect: QGraphicsOpacityEffect | None = None
+        self._menu_animation: QParallelAnimationGroup | None = None
+        self._menu_visible = True
 
         self._build_layout()
         self._apply_style()
@@ -186,6 +133,11 @@ class SettingsDialog(QDialog):
 
         self._menu_panel = QWidget()
         self._menu_panel.setObjectName("MenuPanel")
+        self._menu_panel.setMinimumWidth(MENU_WIDTH)
+        self._menu_panel.setMaximumWidth(MENU_WIDTH)
+        self._menu_effect = QGraphicsOpacityEffect(self._menu_panel)
+        self._menu_effect.setOpacity(1.0)
+        self._menu_panel.setGraphicsEffect(self._menu_effect)
         menu_layout = QVBoxLayout(self._menu_panel)
         menu_layout.setContentsMargins(8, 8, 8, 8)
         menu_layout.setSpacing(8)
@@ -232,19 +184,77 @@ class SettingsDialog(QDialog):
         layout.addWidget(self._buttons)
 
     def _toggle_menu(self) -> None:
+        if self._menu_panel is None or self._menu_effect is None:
+            return
+
+        showing = not self._menu_visible
+        self._menu_visible = showing
+        self._menu_panel.show()
+
+        if self._menu_animation is not None:
+            self._menu_animation.stop()
+
+        start_width = self._menu_panel.maximumWidth()
+        end_width = MENU_WIDTH if showing else 0
+        start_opacity = self._menu_effect.opacity()
+        end_opacity = 1.0 if showing else 0.0
+
+        min_width_animation = QPropertyAnimation(self._menu_panel, b"minimumWidth", self)
+        min_width_animation.setStartValue(start_width)
+        min_width_animation.setEndValue(end_width)
+        min_width_animation.setDuration(MENU_ANIMATION_MS)
+        min_width_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        max_width_animation = QPropertyAnimation(self._menu_panel, b"maximumWidth", self)
+        max_width_animation.setStartValue(start_width)
+        max_width_animation.setEndValue(end_width)
+        max_width_animation.setDuration(MENU_ANIMATION_MS)
+        max_width_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        opacity_animation = QPropertyAnimation(self._menu_effect, b"opacity", self)
+        opacity_animation.setStartValue(start_opacity)
+        opacity_animation.setEndValue(end_opacity)
+        opacity_animation.setDuration(MENU_ANIMATION_MS)
+        opacity_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        animation = QParallelAnimationGroup(self)
+        animation.addAnimation(min_width_animation)
+        animation.addAnimation(max_width_animation)
+        animation.addAnimation(opacity_animation)
+        animation.finished.connect(lambda: self._finish_menu_animation(showing))
+        self._menu_animation = animation
+        animation.start()
+
+    def _finish_menu_animation(self, showing: bool) -> None:
         if self._menu_panel is None:
             return
-        self._menu_panel.setHidden(not self._menu_panel.isHidden())
+        if showing:
+            self._menu_panel.setMinimumWidth(MENU_WIDTH)
+            self._menu_panel.setMaximumWidth(MENU_WIDTH)
+            self._menu_panel.show()
+        else:
+            self._menu_panel.hide()
+            self._menu_panel.setMinimumWidth(0)
+            self._menu_panel.setMaximumWidth(0)
 
     def _select_section(self, index: int) -> None:
         if self._section_stack is not None:
             self._section_stack.setCurrentIndex(index)
 
-    def _build_model_group(self) -> QGroupBox:
-        group = QGroupBox("模型配置")
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 16)
-        layout.setSpacing(12)
+    def _build_section_page(self, title: str) -> tuple[QWidget, QVBoxLayout]:
+        page = QWidget()
+        page.setObjectName("SectionPage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("SectionTitle")
+        layout.addWidget(title_label)
+        return page, layout
+
+    def _build_model_group(self) -> QWidget:
+        group, layout = self._build_section_page("模型配置")
         layout.addWidget(self._build_field(
             "接口地址",
             self._base_url_edit,
@@ -265,44 +275,39 @@ class SettingsDialog(QDialog):
             self._chat_model_edit,
             "用于纯文本聊天，也会作为视觉请求降级后的重试模型。",
         ))
+        layout.addStretch(1)
         return group
 
-    def _build_preset_group(self) -> QGroupBox:
-        group = QGroupBox("人设设置")
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 16)
-        layout.setSpacing(12)
+    def _build_preset_group(self) -> QWidget:
+        group, layout = self._build_section_page("人设设置")
         layout.addWidget(self._build_field(
             "人设提示词",
             self._personality_edit,
             "留空保存会使用默认人设。",
         ))
+        layout.addStretch(1)
         return group
 
-    def _build_chat_group(self) -> QGroupBox:
-        group = QGroupBox("多轮对话")
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 16)
-        layout.setSpacing(12)
+    def _build_chat_group(self) -> QWidget:
+        group, layout = self._build_section_page("多轮对话")
         layout.addWidget(self._multi_turn_enabled_check)
         layout.addWidget(self._build_field(
             "记忆轮数",
             self._build_memory_turns_row(),
             "保留本次运行期间最近的主动聊天和被动观察；关闭应用后会清空。",
         ))
+        layout.addStretch(1)
         return group
 
-    def _build_observer_group(self) -> QGroupBox:
-        group = QGroupBox("全局监听")
-        layout = QVBoxLayout(group)
-        layout.setContentsMargins(18, 20, 18, 16)
-        layout.setSpacing(12)
+    def _build_observer_group(self) -> QWidget:
+        group, layout = self._build_section_page("全局监听")
         layout.addWidget(self._observation_enabled_check)
         layout.addWidget(self._build_field(
             "监听间隔",
             self._build_interval_row(),
             "开启后会按间隔观察当前前台窗口，不再按窗口标题或 IDE 关键词过滤。",
         ))
+        layout.addStretch(1)
         return group
 
     def _build_field(self, title: str, editor: QWidget, hint: str = "") -> QWidget:
@@ -335,29 +340,27 @@ class SettingsDialog(QDialog):
         seconds_label = QLabel("秒")
         seconds_label.setObjectName("IntervalUnit")
 
-        increase_button = IntervalStepButton(1)
-        decrease_button = IntervalStepButton(-1)
-        for button, position, delta in (
-            (increase_button, "up", 1),
-            (decrease_button, "down", -1),
+        decrease_button = QPushButton("-")
+        increase_button = QPushButton("+")
+        for button, delta in (
+            (decrease_button, -1),
+            (increase_button, 1),
         ):
             button.setObjectName("StepButton")
-            button.setProperty("stepPosition", position)
+            button.setFixedSize(34, 34)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setToolTip("增加 1 秒" if delta > 0 else "减少 1 秒")
             button.clicked.connect(lambda _checked=False, step=delta: self._step_interval(step))
-
-        step_layout = QVBoxLayout()
-        step_layout.setContentsMargins(0, 0, 0, 0)
-        step_layout.setSpacing(4)
-        step_layout.addWidget(increase_button)
-        step_layout.addWidget(decrease_button)
 
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(7)
         layout.addWidget(self._interval_edit, 1)
         layout.addWidget(seconds_label)
-        layout.addLayout(step_layout)
+        layout.addWidget(decrease_button)
+        layout.addWidget(increase_button)
         return row
 
     def _build_memory_turns_row(self) -> QWidget:
@@ -453,27 +456,21 @@ class SettingsDialog(QDialog):
                 color: #64748b;
                 font-size: 11px;
             }
-            QGroupBox {
+            QWidget#SectionPage {
                 background: #ffffff;
                 border: 1px solid #bfd7ff;
                 border-radius: 8px;
-                margin-top: 14px;
-                padding: 14px 12px 12px 12px;
-                font-weight: 600;
-                color: #1d4ed8;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px;
-                background: #f8fbff;
+            QLabel#SectionTitle {
+                color: #1d4ed8;
+                font-size: 15px;
+                font-weight: 700;
+                padding-bottom: 2px;
             }
             QWidget#MenuPanel {
                 background: #ffffff;
                 border: 1px solid #bfd7ff;
                 border-radius: 8px;
-                min-width: 128px;
-                max-width: 148px;
             }
             QStackedWidget#SectionStack {
                 background: transparent;
@@ -507,6 +504,22 @@ class SettingsDialog(QDialog):
                 color: #1e385f;
                 spacing: 8px;
                 font-weight: 600;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                border: 1px solid #7aa7e8;
+                background: #f7fbff;
+            }
+            QCheckBox::indicator:hover {
+                border: 1px solid #2563eb;
+                background: #eaf2ff;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #2563eb;
+                background: #2563eb;
+                image: none;
             }
             QDialogButtonBox {
                 button-layout: 0;
@@ -543,6 +556,24 @@ class SettingsDialog(QDialog):
             QPushButton#SectionButton:checked {
                 background: #dbeafe;
                 color: #0f3f8c;
+            }
+            QPushButton#StepButton {
+                background: #ffffff;
+                border: 1px solid #b7d4ff;
+                border-radius: 6px;
+                color: #1d4ed8;
+                font-size: 16px;
+                font-weight: 700;
+                padding: 0;
+                min-width: 34px;
+            }
+            QPushButton#StepButton:hover {
+                background: #eaf2ff;
+                border-color: #60a5fa;
+            }
+            QPushButton#StepButton:pressed {
+                background: #dbeafe;
+                border-color: #2563eb;
             }
             QPushButton#SaveButton {
                 background: #2563eb;

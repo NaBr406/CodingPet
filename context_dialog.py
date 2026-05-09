@@ -23,7 +23,7 @@ class ContextDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("本次对话上下文")
+        self.setWindowTitle("本次对话")
         self.setModal(False)
         self.setMinimumSize(560, 620)
 
