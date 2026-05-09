@@ -105,7 +105,7 @@ runtime:
 
 `pet_preset`：
 
-- `personality_prompt`：宠物的人设，会注入聊天和观察提示词。
+- `personality_prompt`：宠物的人设，会注入聊天和观察提示词。未填写时使用默认人设。
 
 `observer`：
 

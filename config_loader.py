@@ -7,6 +7,9 @@ from typing import Any
 import yaml
 
 
+DEFAULT_PERSONALITY_PROMPT = "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
+
+
 class ConfigError(Exception):
     pass
 
@@ -37,6 +40,7 @@ class CoreSettings:
     api_key: str
     vision_model_name: str
     chat_model_name: str
+    personality_prompt: str
     global_observation_enabled: bool
     interval_seconds: int
 
@@ -77,7 +81,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         raw = yaml.safe_load(handle) or {}
 
     llm_raw = _read_section(raw, "llm")
-    preset_raw = _read_section(raw, "pet_preset")
+    preset_raw = _optional_section(raw, "pet_preset")
     observer_raw = raw.get("observer") or {}
     runtime_raw = raw.get("runtime") or {}
 
@@ -88,7 +92,11 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         chat_model_name=_require_str(llm_raw, "llm.chat_model_name"),
     )
     preset = PetPresetConfig(
-        personality_prompt=_require_str(preset_raw, "pet_preset.personality_prompt"),
+        personality_prompt=_optional_str(
+            preset_raw,
+            "personality_prompt",
+            DEFAULT_PERSONALITY_PROMPT,
+        ),
     )
     observer = ObserverConfig(
         global_observation_enabled=_observer_enabled(observer_raw),
@@ -132,6 +140,7 @@ def core_settings_from_config(config: AppConfig) -> CoreSettings:
         api_key=config.llm.api_key,
         vision_model_name=config.llm.vision_model_name,
         chat_model_name=config.llm.chat_model_name,
+        personality_prompt=config.pet_preset.personality_prompt,
         global_observation_enabled=config.observer.global_observation_enabled,
         interval_seconds=config.observer.interval_seconds,
     )
@@ -148,11 +157,13 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
         raise ConfigError("Config file root must be a mapping")
 
     llm_raw = _ensure_section(raw, "llm")
+    preset_raw = _ensure_section(raw, "pet_preset")
     observer_raw = _ensure_section(raw, "observer")
 
     base_url = _clean_required_text(settings.base_url, "llm.base_url")
     vision_model_name = _clean_required_text(settings.vision_model_name, "llm.vision_model_name")
     chat_model_name = _clean_required_text(settings.chat_model_name, "llm.chat_model_name")
+    personality_prompt = settings.personality_prompt.strip() or DEFAULT_PERSONALITY_PROMPT
     api_key = settings.api_key.strip()
     interval_seconds = max(5, int(settings.interval_seconds))
 
@@ -160,6 +171,7 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     llm_raw["api_key"] = api_key
     llm_raw["vision_model_name"] = vision_model_name
     llm_raw["chat_model_name"] = chat_model_name
+    preset_raw["personality_prompt"] = personality_prompt
     observer_raw["global_observation_enabled"] = bool(settings.global_observation_enabled)
     observer_raw["interval_seconds"] = interval_seconds
 
@@ -184,6 +196,15 @@ def _ensure_section(raw: dict[str, Any], section_name: str) -> dict[str, Any]:
     return section
 
 
+def _optional_section(raw: dict[str, Any], section_name: str) -> dict[str, Any]:
+    section = raw.get(section_name)
+    if section is None:
+        return {}
+    if not isinstance(section, dict):
+        raise ConfigError(f"Invalid config section: {section_name}")
+    return section
+
+
 def _require_str(section: dict[str, Any], field_name: str, allow_empty: bool = False) -> str:
     key = field_name.split(".")[-1]
     value = section.get(key)
@@ -192,6 +213,14 @@ def _require_str(section: dict[str, Any], field_name: str, allow_empty: bool = F
     if not allow_empty and not value.strip():
         raise ConfigError(f"Empty config value: {field_name}")
     return value.strip()
+
+
+def _optional_str(section: dict[str, Any], key: str, default: str) -> str:
+    value = section.get(key)
+    if not isinstance(value, str):
+        return default
+    normalized = value.strip()
+    return normalized or default
 
 
 def _clean_required_text(value: str, field_name: str) -> str:

@@ -12,11 +12,12 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from config_loader import AppConfig, CoreSettings, core_settings_from_config
+from config_loader import AppConfig, CoreSettings, DEFAULT_PERSONALITY_PROMPT, core_settings_from_config
 
 
 INTERVAL_MIN_SECONDS = 5
@@ -87,7 +88,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("CodingPet 设置")
         self.setModal(True)
         self.setMinimumWidth(560)
-        self.setMinimumHeight(620)
+        self.setMinimumHeight(740)
 
         settings = core_settings_from_config(config)
         self._base_url_edit = QLineEdit(settings.base_url)
@@ -99,6 +100,10 @@ class SettingsDialog(QDialog):
         self._vision_model_edit.setPlaceholderText("支持 image_url 的视觉模型")
         self._chat_model_edit = QLineEdit(settings.chat_model_name)
         self._chat_model_edit.setPlaceholderText("纯文本聊天模型")
+        self._personality_edit = QPlainTextEdit(settings.personality_prompt)
+        self._personality_edit.setObjectName("PersonalityInput")
+        self._personality_edit.setPlaceholderText(DEFAULT_PERSONALITY_PROMPT)
+        self._personality_edit.setFixedHeight(86)
         self._observation_enabled_check = QCheckBox("开启全局监听")
         self._observation_enabled_check.setChecked(settings.global_observation_enabled)
         self._interval_edit = QLineEdit(str(settings.interval_seconds))
@@ -117,6 +122,7 @@ class SettingsDialog(QDialog):
             api_key=self._api_key_edit.text().strip(),
             vision_model_name=self._vision_model_edit.text().strip(),
             chat_model_name=self._chat_model_edit.text().strip(),
+            personality_prompt=self._personality_edit.toPlainText().strip() or DEFAULT_PERSONALITY_PROMPT,
             global_observation_enabled=self._observation_enabled_check.isChecked(),
             interval_seconds=self._interval_seconds(),
         )
@@ -133,11 +139,12 @@ class SettingsDialog(QDialog):
     def _build_layout(self) -> None:
         title = QLabel("设置")
         title.setObjectName("DialogTitle")
-        subtitle = QLabel("配置模型和全局监听，保存后会立即应用到新的聊天和观察任务。")
+        subtitle = QLabel("配置模型、人设和全局监听，保存后会立即应用到新的聊天和观察任务。")
         subtitle.setObjectName("DialogSubtitle")
         subtitle.setWordWrap(True)
 
         model_group = self._build_model_group()
+        preset_group = self._build_preset_group()
         observer_group = self._build_observer_group()
 
         self._buttons = QDialogButtonBox(
@@ -158,6 +165,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addWidget(model_group)
+        layout.addWidget(preset_group)
         layout.addWidget(observer_group)
         layout.addStretch(1)
         layout.addWidget(self._buttons)
@@ -186,6 +194,18 @@ class SettingsDialog(QDialog):
             "聊天模型",
             self._chat_model_edit,
             "用于纯文本聊天，也会作为视觉请求降级后的重试模型。",
+        ))
+        return group
+
+    def _build_preset_group(self) -> QGroupBox:
+        group = QGroupBox("人设设置")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(18, 20, 18, 16)
+        layout.setSpacing(12)
+        layout.addWidget(self._build_field(
+            "人设提示词",
+            self._personality_edit,
+            "留空保存会使用默认人设。",
         ))
         return group
 
@@ -341,7 +361,8 @@ class SettingsDialog(QDialog):
                 background: #f8fbff;
             }
             QLineEdit,
-            QLineEdit#IntervalInput {
+            QLineEdit#IntervalInput,
+            QPlainTextEdit#PersonalityInput {
                 background: #ffffff;
                 border: 1px solid #b7d4ff;
                 border-radius: 6px;
@@ -350,7 +371,8 @@ class SettingsDialog(QDialog):
                 padding: 7px 9px;
             }
             QLineEdit:focus,
-            QLineEdit#IntervalInput:focus {
+            QLineEdit#IntervalInput:focus,
+            QPlainTextEdit#PersonalityInput:focus {
                 border: 1px solid #2563eb;
             }
             QLabel#IntervalUnit {
