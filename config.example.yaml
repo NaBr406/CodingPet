@@ -7,6 +7,11 @@ llm:
 pet_preset:
   personality_prompt: "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
 
+chat:
+  # 是否开启多轮对话：开启后主动聊天会携带本次运行内最近 memory_turns 条上下文。
+  multi_turn_enabled: false
+  memory_turns: 5
+
 observer:
   # 是否开启全局观测：开启后会定时观察当前前台窗口，也会在主动聊天时附带当前屏幕截图。
   global_observation_enabled: true

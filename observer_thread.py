@@ -17,7 +17,7 @@ from logging_utils import LOGGER_NAME
 class ObserverWorker(QThread):
     observation_started = pyqtSignal()
     observation_failed = pyqtSignal()
-    observation_ready = pyqtSignal(str, str)
+    observation_ready = pyqtSignal(str, str, str)
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
@@ -57,7 +57,7 @@ class ObserverWorker(QThread):
         screenshot_base64 = self._capture_active_region(active_window)
         reply = analyze_screenshot(self._config, screenshot_base64, title)
         logger.info("观察线程已为窗口生成主动评论：%s", title)
-        self.observation_ready.emit(reply.message, reply.emotion.value)
+        self.observation_ready.emit(title, reply.message, reply.emotion.value)
 
     def _capture_active_region(self, active_window: object | None) -> str:
         with mss() as screen_capture:

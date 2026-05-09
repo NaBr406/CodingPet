@@ -379,6 +379,7 @@ class PetWindow(QWidget):
     resize_started = pyqtSignal()
     resize_finished = pyqtSignal()
     settings_requested = pyqtSignal()
+    context_requested = pyqtSignal()
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__(None, WINDOW_FLAGS)
@@ -501,9 +502,12 @@ class PetWindow(QWidget):
             }
             """
         )
+        context_action = menu.addAction("查看上下文")
         settings_action = menu.addAction("设置")
         selected_action = menu.exec(global_pos)
-        if selected_action == settings_action:
+        if selected_action == context_action:
+            self.context_requested.emit()
+        elif selected_action == settings_action:
             self.settings_requested.emit()
 
     def _start_drag(self, event: QMouseEvent) -> None:

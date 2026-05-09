@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from chat_thread import ChatWorker
 from config_loader import ConfigError, AppConfig, load_config, save_core_settings
+from context_dialog import ContextDialog
+from conversation_history import ACTIVE_CHAT_SOURCE, PASSIVE_CHAT_SOURCE, ChatTurn
 from logging_utils import LOGGER_NAME, setup_logging
 from observer_thread import ObserverWorker
 from pet_state import RANDOM_MOOD_STATES, PetState
@@ -23,6 +25,8 @@ class CodingPetController(QObject):
         self._logger = logging.getLogger(LOGGER_NAME)
         self._chat_worker: ChatWorker | None = None
         self._observer_worker: ObserverWorker | None = None
+        self._context_dialog: ContextDialog | None = None
+        self._chat_history: list[ChatTurn] = []
         self._interaction_busy = False
         self._manual_override_active = False
 
@@ -35,6 +39,7 @@ class CodingPetController(QObject):
         self.window.resize_started.connect(self._handle_resize_started)
         self.window.resize_finished.connect(self._handle_resize_finished)
         self.window.settings_requested.connect(self._open_settings)
+        self.window.context_requested.connect(self._open_context_dialog)
 
         self._state_reset_timer = QTimer(self)
         self._state_reset_timer.setSingleShot(True)
@@ -64,12 +69,22 @@ class CodingPetController(QObject):
         if self._chat_worker is not None and self._chat_worker.isRunning():
             self._chat_worker.wait(1500)
 
+        if self._context_dialog is not None:
+            self._context_dialog.close()
+
         self._random_mood_timer.stop()
 
-    def _start_chat(self, text: str) -> None:
+    def _start_chat(self, text: str) -> bool:
+        user_text = text.strip()
+        if not user_text:
+            return False
+
         if self._chat_worker is not None and self._chat_worker.isRunning():
             self.window.show_message("一次只处理一个请求，别把我当竞态条件。")
-            return
+            if self._context_dialog is not None:
+                self._context_dialog.set_sending(False)
+                self._context_dialog.set_status("当前已有请求处理中。")
+            return False
 
         self.window.set_state(PetState.THINKING)
         self.window.show_message("我想一下...", 1600)
@@ -77,12 +92,16 @@ class CodingPetController(QObject):
         self._manual_override_active = False
         self._random_mood_timer.stop()
 
-        worker = ChatWorker(self._config, text)
-        worker.response_ready.connect(self._handle_model_reply)
+        if self._context_dialog is not None:
+            self._context_dialog.set_sending(True)
+
+        worker = ChatWorker(self._config, user_text, self._chat_history_snapshot())
+        worker.response_ready.connect(self._handle_chat_reply)
         worker.request_failed.connect(self._handle_interaction_failed)
         worker.finished.connect(self._clear_chat_worker)
         self._chat_worker = worker
         worker.start()
+        return True
 
     def _clear_chat_worker(self) -> None:
         if self._chat_worker is not None:
@@ -108,6 +127,8 @@ class CodingPetController(QObject):
     def _apply_config(self, config: AppConfig) -> None:
         self._config = config
         self.window.update_config(config)
+        self._trim_chat_history()
+        self._refresh_context_dialog()
         self._sync_observer_worker(force_restart=True)
 
     def _sync_observer_worker(self, force_restart: bool = False) -> None:
@@ -128,7 +149,7 @@ class CodingPetController(QObject):
         worker = ObserverWorker(self._config)
         worker.observation_started.connect(self._handle_observation_started)
         worker.observation_failed.connect(self._handle_observation_finished_without_reply)
-        worker.observation_ready.connect(self._handle_model_reply)
+        worker.observation_ready.connect(self._handle_observation_reply)
         worker.start()
         self._observer_worker = worker
         self._logger.info("阶段 3 成功：全局观测线程已启动。")
@@ -161,6 +182,18 @@ class CodingPetController(QObject):
         if restart_after_stop and self._config.observer.global_observation_enabled:
             self._start_observer_worker()
 
+    def _handle_chat_reply(self, user_text: str, message: str, emotion: str) -> None:
+        self._record_chat_turn(user_text, message, ACTIVE_CHAT_SOURCE)
+        if self._context_dialog is not None:
+            self._context_dialog.set_sending(False)
+        self._handle_model_reply(message, emotion)
+        self._refresh_context_dialog()
+
+    def _handle_observation_reply(self, window_title: str, message: str, emotion: str) -> None:
+        self._record_chat_turn(f"被动观察：{window_title}", message, PASSIVE_CHAT_SOURCE)
+        self._handle_model_reply(message, emotion)
+        self._refresh_context_dialog()
+
     def _handle_model_reply(self, message: str, emotion: str) -> None:
         state = PetState.from_emotion(emotion)
         self._interaction_busy = True
@@ -184,6 +217,9 @@ class CodingPetController(QObject):
             self._schedule_random_mood()
 
     def _handle_interaction_failed(self, message: str) -> None:
+        if self._context_dialog is not None:
+            self._context_dialog.set_sending(False)
+            self._context_dialog.set_status("发送失败，稍后再试吧。")
         self.window.set_state(PetState.IDLE)
         self.window.show_message(message)
         self._finish_interaction_state()
@@ -221,6 +257,43 @@ class CodingPetController(QObject):
 
     def _handle_chat_cancelled(self) -> None:
         self._clear_manual_override()
+
+    def _open_context_dialog(self) -> None:
+        if self._context_dialog is None:
+            dialog = ContextDialog(self.window)
+            dialog.submitted.connect(self._handle_context_submitted)
+            self._context_dialog = dialog
+        self._refresh_context_dialog()
+        self._context_dialog.show()
+        self._context_dialog.raise_()
+        self._context_dialog.activateWindow()
+
+    def _handle_context_submitted(self, text: str) -> None:
+        if not self._start_chat(text) and self._context_dialog is not None:
+            self._context_dialog.set_sending(False)
+
+    def _record_chat_turn(self, user_text: str, assistant_text: str, source: str) -> None:
+        self._chat_history.append(ChatTurn(user=user_text, assistant=assistant_text, source=source))
+        self._trim_chat_history()
+
+    def _chat_history_snapshot(self) -> tuple[ChatTurn, ...]:
+        if not self._config.chat.multi_turn_enabled:
+            return ()
+        return tuple(self._chat_history[-self._config.chat.memory_turns:])
+
+    def _trim_chat_history(self) -> None:
+        limit = self._config.chat.memory_turns
+        if len(self._chat_history) > limit:
+            del self._chat_history[:-limit]
+
+    def _refresh_context_dialog(self) -> None:
+        if self._context_dialog is None:
+            return
+        self._context_dialog.update_context(
+            self._chat_history,
+            self._config.chat.multi_turn_enabled,
+            self._config.chat.memory_turns,
+        )
 
     def _handle_drag_started(self) -> None:
         if self._interaction_busy:

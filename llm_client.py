@@ -5,11 +5,12 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 from openai import BadRequestError, NotFoundError, OpenAI
 
 from config_loader import AppConfig
+from conversation_history import ChatTurn
 from logging_utils import LOGGER_NAME
 from pet_state import PetState
 
@@ -28,13 +29,15 @@ def generate_chat_reply(
     config: AppConfig,
     user_text: str,
     screenshot_base64: str | None = None,
+    history_turns: Sequence[ChatTurn] | None = None,
 ) -> ModelReply:
     client = _build_client(
         base_url=config.llm.base_url,
         api_key=config.llm.api_key,
         timeout_seconds=config.runtime.request_timeout_seconds,
     )
-    messages = _build_chat_messages(config, user_text, screenshot_base64)
+    active_history = _active_chat_history(config, history_turns)
+    messages = _build_chat_messages(config, user_text, screenshot_base64, active_history)
     try:
         response = client.chat.completions.create(
             model=_chat_model_for_request(config, screenshot_base64),
@@ -51,7 +54,7 @@ def generate_chat_reply(
         response = client.chat.completions.create(
             model=config.llm.chat_model_name,
             temperature=0.8,
-            messages=_build_chat_messages(config, user_text, None),
+            messages=_build_chat_messages(config, user_text, None, active_history),
         )
     raw_text = _extract_chat_text(response)
     return parse_model_reply(raw_text, fallback_message="抱歉，我没读懂这次回复。")
@@ -126,8 +129,9 @@ def _build_chat_messages(
     config: AppConfig,
     user_text: str,
     screenshot_base64: str | None,
+    history_turns: Sequence[ChatTurn] | None = None,
 ) -> list[dict[str, Any]]:
-    return [
+    messages: list[dict[str, Any]] = [
         {
             "role": "system",
             "content": (
@@ -138,9 +142,27 @@ def _build_chat_messages(
                 "如果截图对回答有帮助，请结合截图内容。"
                 "不要输出 JSON、Markdown 或额外说明。"
             ),
-        },
-        {"role": "user", "content": _build_user_content(user_text, screenshot_base64)},
+        }
     ]
+    for turn in history_turns or ():
+        user = turn.user.strip()
+        assistant = turn.assistant.strip()
+        if user:
+            messages.append({"role": "user", "content": user})
+        if assistant:
+            messages.append({"role": "assistant", "content": assistant})
+
+    messages.append({"role": "user", "content": _build_user_content(user_text, screenshot_base64)})
+    return messages
+
+
+def _active_chat_history(
+    config: AppConfig,
+    history_turns: Sequence[ChatTurn] | None,
+) -> tuple[ChatTurn, ...]:
+    if not config.chat.multi_turn_enabled or not history_turns:
+        return ()
+    return tuple(history_turns)[-config.chat.memory_turns:]
 
 
 def _build_user_content(user_text: str, screenshot_base64: str | None) -> str | list[dict[str, Any]]:

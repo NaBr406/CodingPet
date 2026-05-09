@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QIntValidator, QPainter, QPen
 from PyQt6.QtWidgets import (
     QAbstractButton,
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -13,6 +14,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +25,8 @@ from config_loader import AppConfig, CoreSettings, DEFAULT_PERSONALITY_PROMPT, c
 
 INTERVAL_MIN_SECONDS = 5
 INTERVAL_MAX_SECONDS = 86400
+MEMORY_TURNS_MIN = 1
+MEMORY_TURNS_MAX = 20
 
 
 class IntervalStepButton(QAbstractButton):
@@ -87,8 +92,7 @@ class SettingsDialog(QDialog):
         self._config = config
         self.setWindowTitle("CodingPet 设置")
         self.setModal(True)
-        self.setMinimumWidth(560)
-        self.setMinimumHeight(740)
+        self.setMinimumSize(680, 520)
 
         settings = core_settings_from_config(config)
         self._base_url_edit = QLineEdit(settings.base_url)
@@ -104,6 +108,14 @@ class SettingsDialog(QDialog):
         self._personality_edit.setObjectName("PersonalityInput")
         self._personality_edit.setPlaceholderText(DEFAULT_PERSONALITY_PROMPT)
         self._personality_edit.setFixedHeight(86)
+        self._multi_turn_enabled_check = QCheckBox("开启多轮对话")
+        self._multi_turn_enabled_check.setChecked(settings.multi_turn_enabled)
+        self._memory_turns_edit = QLineEdit(str(settings.memory_turns))
+        self._memory_turns_edit.setObjectName("MemoryTurnsInput")
+        self._memory_turns_edit.setPlaceholderText("5")
+        self._memory_turns_edit.setValidator(
+            QIntValidator(MEMORY_TURNS_MIN, MEMORY_TURNS_MAX, self)
+        )
         self._observation_enabled_check = QCheckBox("开启全局监听")
         self._observation_enabled_check.setChecked(settings.global_observation_enabled)
         self._interval_edit = QLineEdit(str(settings.interval_seconds))
@@ -112,6 +124,9 @@ class SettingsDialog(QDialog):
         self._interval_edit.setValidator(
             QIntValidator(INTERVAL_MIN_SECONDS, INTERVAL_MAX_SECONDS, self)
         )
+        self._menu_panel: QWidget | None = None
+        self._section_stack: QStackedWidget | None = None
+        self._section_buttons: list[QPushButton] = []
 
         self._build_layout()
         self._apply_style()
@@ -123,6 +138,8 @@ class SettingsDialog(QDialog):
             vision_model_name=self._vision_model_edit.text().strip(),
             chat_model_name=self._chat_model_edit.text().strip(),
             personality_prompt=self._personality_edit.toPlainText().strip() or DEFAULT_PERSONALITY_PROMPT,
+            multi_turn_enabled=self._multi_turn_enabled_check.isChecked(),
+            memory_turns=self._memory_turns(),
             global_observation_enabled=self._observation_enabled_check.isChecked(),
             interval_seconds=self._interval_seconds(),
         )
@@ -143,9 +160,56 @@ class SettingsDialog(QDialog):
         subtitle.setObjectName("DialogSubtitle")
         subtitle.setWordWrap(True)
 
-        model_group = self._build_model_group()
-        preset_group = self._build_preset_group()
-        observer_group = self._build_observer_group()
+        menu_button = QPushButton("☰")
+        menu_button.setObjectName("MenuToggleButton")
+        menu_button.setFixedSize(38, 34)
+        menu_button.setToolTip("展开或收起设置分类")
+        menu_button.clicked.connect(self._toggle_menu)
+
+        title_row = QWidget()
+        title_layout = QHBoxLayout(title_row)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(10)
+        title_layout.addWidget(menu_button)
+        title_layout.addWidget(title, 1)
+
+        self._section_stack = QStackedWidget()
+        self._section_stack.setObjectName("SectionStack")
+        sections = (
+            ("模型配置", self._build_model_group()),
+            ("人设设置", self._build_preset_group()),
+            ("多轮对话", self._build_chat_group()),
+            ("全局监听", self._build_observer_group()),
+        )
+        for _label, page in sections:
+            self._section_stack.addWidget(page)
+
+        self._menu_panel = QWidget()
+        self._menu_panel.setObjectName("MenuPanel")
+        menu_layout = QVBoxLayout(self._menu_panel)
+        menu_layout.setContentsMargins(8, 8, 8, 8)
+        menu_layout.setSpacing(8)
+
+        self._section_button_group = QButtonGroup(self)
+        self._section_button_group.setExclusive(True)
+        self._section_buttons = []
+        for index, (label, _page) in enumerate(sections):
+            button = QPushButton(label)
+            button.setObjectName("SectionButton")
+            button.setCheckable(True)
+            button.clicked.connect(lambda _checked=False, page_index=index: self._select_section(page_index))
+            self._section_button_group.addButton(button)
+            self._section_buttons.append(button)
+            menu_layout.addWidget(button)
+        menu_layout.addStretch(1)
+        self._section_buttons[0].setChecked(True)
+
+        content = QWidget()
+        content_layout = QHBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
+        content_layout.addWidget(self._menu_panel)
+        content_layout.addWidget(self._section_stack, 1)
 
         self._buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -161,14 +225,20 @@ class SettingsDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 20, 22, 20)
-        layout.setSpacing(14)
-        layout.addWidget(title)
+        layout.setSpacing(12)
+        layout.addWidget(title_row)
         layout.addWidget(subtitle)
-        layout.addWidget(model_group)
-        layout.addWidget(preset_group)
-        layout.addWidget(observer_group)
-        layout.addStretch(1)
+        layout.addWidget(content, 1)
         layout.addWidget(self._buttons)
+
+    def _toggle_menu(self) -> None:
+        if self._menu_panel is None:
+            return
+        self._menu_panel.setHidden(not self._menu_panel.isHidden())
+
+    def _select_section(self, index: int) -> None:
+        if self._section_stack is not None:
+            self._section_stack.setCurrentIndex(index)
 
     def _build_model_group(self) -> QGroupBox:
         group = QGroupBox("模型配置")
@@ -206,6 +276,19 @@ class SettingsDialog(QDialog):
             "人设提示词",
             self._personality_edit,
             "留空保存会使用默认人设。",
+        ))
+        return group
+
+    def _build_chat_group(self) -> QGroupBox:
+        group = QGroupBox("多轮对话")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(18, 20, 18, 16)
+        layout.setSpacing(12)
+        layout.addWidget(self._multi_turn_enabled_check)
+        layout.addWidget(self._build_field(
+            "记忆轮数",
+            self._build_memory_turns_row(),
+            "保留本次运行期间最近的主动聊天和被动观察；关闭应用后会清空。",
         ))
         return group
 
@@ -277,6 +360,18 @@ class SettingsDialog(QDialog):
         layout.addLayout(step_layout)
         return row
 
+    def _build_memory_turns_row(self) -> QWidget:
+        unit_label = QLabel("轮")
+        unit_label.setObjectName("MemoryTurnsUnit")
+
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(self._memory_turns_edit, 1)
+        layout.addWidget(unit_label)
+        return row
+
     def _build_field_hint(self, text: str) -> QLabel:
         hint = QLabel(text)
         hint.setObjectName("FieldHint")
@@ -296,6 +391,15 @@ class SettingsDialog(QDialog):
         except ValueError as exc:
             raise ValueError("监听间隔必须是数字。") from exc
 
+    def _memory_turns(self) -> int:
+        raw_value = self._memory_turns_edit.text().strip()
+        if not raw_value:
+            raise ValueError("记忆轮数不能为空。")
+        try:
+            return int(raw_value)
+        except ValueError as exc:
+            raise ValueError("记忆轮数必须是数字。") from exc
+
     def _set_interval_seconds(self, value: int) -> None:
         clamped = max(INTERVAL_MIN_SECONDS, min(INTERVAL_MAX_SECONDS, value))
         self._interval_edit.setText(str(clamped))
@@ -314,6 +418,10 @@ class SettingsDialog(QDialog):
             raise ValueError("视觉模型不能为空。")
         if not settings.chat_model_name:
             raise ValueError("聊天模型不能为空。")
+        if settings.memory_turns < MEMORY_TURNS_MIN:
+            raise ValueError("记忆轮数不能小于 1 轮。")
+        if settings.memory_turns > MEMORY_TURNS_MAX:
+            raise ValueError("记忆轮数不能大于 20 轮。")
         if settings.interval_seconds < INTERVAL_MIN_SECONDS:
             raise ValueError("监听间隔不能小于 5 秒。")
         if settings.interval_seconds > INTERVAL_MAX_SECONDS:
@@ -360,8 +468,19 @@ class SettingsDialog(QDialog):
                 padding: 0 6px;
                 background: #f8fbff;
             }
+            QWidget#MenuPanel {
+                background: #ffffff;
+                border: 1px solid #bfd7ff;
+                border-radius: 8px;
+                min-width: 128px;
+                max-width: 148px;
+            }
+            QStackedWidget#SectionStack {
+                background: transparent;
+            }
             QLineEdit,
             QLineEdit#IntervalInput,
+            QLineEdit#MemoryTurnsInput,
             QPlainTextEdit#PersonalityInput {
                 background: #ffffff;
                 border: 1px solid #b7d4ff;
@@ -372,10 +491,15 @@ class SettingsDialog(QDialog):
             }
             QLineEdit:focus,
             QLineEdit#IntervalInput:focus,
+            QLineEdit#MemoryTurnsInput:focus,
             QPlainTextEdit#PersonalityInput:focus {
                 border: 1px solid #2563eb;
             }
             QLabel#IntervalUnit {
+                color: #1e385f;
+                padding: 0 2px;
+            }
+            QLabel#MemoryTurnsUnit {
                 color: #1e385f;
                 padding: 0 2px;
             }
@@ -392,6 +516,33 @@ class SettingsDialog(QDialog):
                 padding: 8px 18px;
                 min-width: 78px;
                 font-weight: 600;
+            }
+            QPushButton#MenuToggleButton {
+                background: #ffffff;
+                border: 1px solid #b7d4ff;
+                color: #1d4ed8;
+                font-size: 18px;
+                padding: 0;
+                min-width: 38px;
+            }
+            QPushButton#MenuToggleButton:hover {
+                background: #eaf2ff;
+            }
+            QPushButton#SectionButton {
+                background: transparent;
+                border: none;
+                color: #1e385f;
+                padding: 9px 10px;
+                text-align: left;
+                min-width: 0;
+            }
+            QPushButton#SectionButton:hover {
+                background: #eef6ff;
+                color: #1d4ed8;
+            }
+            QPushButton#SectionButton:checked {
+                background: #dbeafe;
+                color: #0f3f8c;
             }
             QPushButton#SaveButton {
                 background: #2563eb;

@@ -28,6 +28,12 @@ class PetPresetConfig:
 
 
 @dataclass(frozen=True)
+class ChatConfig:
+    multi_turn_enabled: bool
+    memory_turns: int
+
+
+@dataclass(frozen=True)
 class ObserverConfig:
     global_observation_enabled: bool
     interval_seconds: int
@@ -41,6 +47,8 @@ class CoreSettings:
     vision_model_name: str
     chat_model_name: str
     personality_prompt: str
+    multi_turn_enabled: bool
+    memory_turns: int
     global_observation_enabled: bool
     interval_seconds: int
 
@@ -64,6 +72,7 @@ class AppConfig:
     project_dir: Path
     llm: LLMConfig
     pet_preset: PetPresetConfig
+    chat: ChatConfig
     observer: ObserverConfig
     runtime: RuntimeConfig
 
@@ -82,6 +91,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
 
     llm_raw = _read_section(raw, "llm")
     preset_raw = _optional_section(raw, "pet_preset")
+    chat_raw = _optional_section(raw, "chat")
     observer_raw = raw.get("observer") or {}
     runtime_raw = raw.get("runtime") or {}
 
@@ -97,6 +107,13 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
             "personality_prompt",
             DEFAULT_PERSONALITY_PROMPT,
         ),
+    )
+    chat = ChatConfig(
+        multi_turn_enabled=_bool_value(
+            chat_raw.get("multi_turn_enabled", False),
+            "chat.multi_turn_enabled",
+        ),
+        memory_turns=max(1, min(20, int(chat_raw.get("memory_turns", 5)))),
     )
     observer = ObserverConfig(
         global_observation_enabled=_observer_enabled(observer_raw),
@@ -129,6 +146,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         project_dir=config_path.parent,
         llm=llm,
         pet_preset=preset,
+        chat=chat,
         observer=observer,
         runtime=runtime,
     )
@@ -141,6 +159,8 @@ def core_settings_from_config(config: AppConfig) -> CoreSettings:
         vision_model_name=config.llm.vision_model_name,
         chat_model_name=config.llm.chat_model_name,
         personality_prompt=config.pet_preset.personality_prompt,
+        multi_turn_enabled=config.chat.multi_turn_enabled,
+        memory_turns=config.chat.memory_turns,
         global_observation_enabled=config.observer.global_observation_enabled,
         interval_seconds=config.observer.interval_seconds,
     )
@@ -158,6 +178,7 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
 
     llm_raw = _ensure_section(raw, "llm")
     preset_raw = _ensure_section(raw, "pet_preset")
+    chat_raw = _ensure_section(raw, "chat")
     observer_raw = _ensure_section(raw, "observer")
 
     base_url = _clean_required_text(settings.base_url, "llm.base_url")
@@ -165,6 +186,7 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     chat_model_name = _clean_required_text(settings.chat_model_name, "llm.chat_model_name")
     personality_prompt = settings.personality_prompt.strip() or DEFAULT_PERSONALITY_PROMPT
     api_key = settings.api_key.strip()
+    memory_turns = max(1, min(20, int(settings.memory_turns)))
     interval_seconds = max(5, int(settings.interval_seconds))
 
     llm_raw["base_url"] = base_url
@@ -172,6 +194,8 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     llm_raw["vision_model_name"] = vision_model_name
     llm_raw["chat_model_name"] = chat_model_name
     preset_raw["personality_prompt"] = personality_prompt
+    chat_raw["multi_turn_enabled"] = bool(settings.multi_turn_enabled)
+    chat_raw["memory_turns"] = memory_turns
     observer_raw["global_observation_enabled"] = bool(settings.global_observation_enabled)
     observer_raw["interval_seconds"] = interval_seconds
 
