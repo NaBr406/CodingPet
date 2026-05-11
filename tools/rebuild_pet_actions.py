@@ -20,6 +20,7 @@ SOURCE_SIZE = 1024
 
 @dataclass(frozen=True)
 class RasterPose:
+    # 单帧姿态参数：平移、缩放和倾斜都作用在同一张位图主体上。
     x_offset: float = 0.0
     y_offset: float = 0.0
     scale_x: float = 1.0
@@ -28,6 +29,7 @@ class RasterPose:
 
 
 STATE_ORDER = (
+    # 这里的顺序决定重建时输出状态的遍历顺序。
     "idle",
     "greeting",
     "listening",
@@ -46,6 +48,7 @@ STATE_ORDER = (
 )
 
 SHEET_CELLS = {
+    # 动作表是 5x2 网格，只覆盖静态表里实际存在的 10 个基础状态。
     "idle": (0, 0),
     "thinking": (1, 0),
     "angry": (2, 0),
@@ -98,6 +101,7 @@ def main() -> int:
     canvas_size = max(BASE_CANVAS_SIZE, args.canvas_size)
     clarity = max(0.0, args.clarity)
 
+    # 先拿到每个状态的源图，再统一生成单帧展示图和动画帧序列。
     sources = load_state_sources(args.sheet, args.reference_name)
 
     for state in STATE_ORDER:
@@ -113,6 +117,7 @@ def main() -> int:
 
 
 def load_state_sources(sheet_path_arg: Path | None, reference_name: str) -> dict[str, Image.Image]:
+    # 源图有两种来源：传入的 5x2 动作表，或 assets/source 下已经拆好的单状态图。
     if sheet_path_arg is not None:
         sheet_path = sheet_path_arg.expanduser().resolve()
         if not sheet_path.exists():
@@ -132,6 +137,7 @@ def load_state_sources(sheet_path_arg: Path | None, reference_name: str) -> dict
     sources: dict[str, Image.Image] = {}
     missing_states: list[str] = []
     for state in STATE_ORDER:
+        # 明确的 *_source.png 优先级最高，便于单独修一个状态而不重做整张动作表。
         explicit_source = source_dir / f"{state}_source.png"
         if explicit_source.exists():
             sources[state] = Image.open(explicit_source).convert("RGBA")
@@ -152,6 +158,7 @@ def load_state_sources(sheet_path_arg: Path | None, reference_name: str) -> dict
 
 
 def extract_state_sources(sheet: Image.Image) -> dict[str, Image.Image]:
+    # 输入图约定为 5 列 x 2 行的动作表，SHEET_CELLS 负责声明每个状态的位置。
     cell_width = sheet.width / 5
     cell_height = sheet.height / 2
     sources: dict[str, Image.Image] = {}
@@ -163,6 +170,7 @@ def extract_state_sources(sheet: Image.Image) -> dict[str, Image.Image]:
             round((row + 1) * cell_height),
         )
         crop = sheet.crop(crop_box)
+        # 生成图通常带绿色背景，先抠掉再保留主体并放入统一源画布。
         cutout = remove_green_key(crop)
         cutout = keep_primary_subject(cutout)
         source = fit_subject_to_canvas(cutout, SOURCE_SIZE, padding=72)
@@ -171,6 +179,7 @@ def extract_state_sources(sheet: Image.Image) -> dict[str, Image.Image]:
 
 
 def remove_green_key(image: Image.Image) -> Image.Image:
+    # 通过绿色通道优势判断绿幕像素，同时对近似绿色边缘做半透明软化。
     rgba = image.convert("RGBA")
     pixels = []
     for red, green, blue, alpha in rgba.getdata():
@@ -187,6 +196,7 @@ def remove_green_key(image: Image.Image) -> Image.Image:
     keyed = Image.new("RGBA", rgba.size)
     keyed.putdata(pixels)
     alpha = keyed.getchannel("A")
+    # 抠图后略微收缩并柔化 alpha，减少绿色边缘残留。
     alpha = ImageChops.subtract(alpha, Image.new("L", alpha.size, 8))
     alpha = alpha.filter(ImageFilter.GaussianBlur(0.25))
     keyed.putalpha(alpha)
@@ -194,6 +204,7 @@ def remove_green_key(image: Image.Image) -> Image.Image:
 
 
 def despill_green(image: Image.Image) -> Image.Image:
+    # 抠完背景后，主体边缘可能还带绿色溢色，这里把过强的绿色压回去。
     pixels = []
     for red, green, blue, alpha in image.getdata():
         if alpha == 0:
@@ -209,6 +220,7 @@ def despill_green(image: Image.Image) -> Image.Image:
 
 
 def write_state_source(state: str, source: Image.Image, canvas_size: int, clarity: float) -> None:
+    # 同时保存干净源图和运行时可直接使用的单帧图。
     source_dir = ASSETS_DIR / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
     source.save(source_dir / f"{state}_source.png")
@@ -226,6 +238,7 @@ def write_state_frames(
     *,
     write_webp: bool = False,
 ) -> None:
+    # 每个状态生成固定数量帧，运行时按目录里的 frame_*.png 循环播放。
     state_dir = ASSETS_DIR / state
     state_dir.mkdir(parents=True, exist_ok=True)
     base = source_to_canvas(source, canvas_size)
@@ -240,6 +253,7 @@ def write_state_frames(
 
 
 def source_to_canvas(source: Image.Image, canvas_size: int) -> Image.Image:
+    # 所有源图最终都归一成同尺寸正方形画布，后续姿态计算才稳定。
     source = source.convert("RGBA")
     if source.size == (canvas_size, canvas_size):
         return source
@@ -247,6 +261,7 @@ def source_to_canvas(source: Image.Image, canvas_size: int) -> Image.Image:
 
 
 def build_motion_frame(state: str, base: Image.Image, index: int) -> Image.Image:
+    # 先根据时间点取姿态，再应用缩放和倾斜，最后清理透明角落。
     timeline = index / FRAME_COUNT
     motion_scale = base.width / BASE_CANVAS_SIZE
     pose = scale_pose(choreograph_pose(state, timeline), motion_scale)
@@ -257,6 +272,7 @@ def build_motion_frame(state: str, base: Image.Image, index: int) -> Image.Image
 
 
 def scale_pose(pose: RasterPose, factor: float) -> RasterPose:
+    # 画布尺寸变大时，平移和倾斜像素也要按比例放大。
     return RasterPose(
         x_offset=pose.x_offset * factor,
         y_offset=pose.y_offset * factor,
@@ -267,6 +283,7 @@ def scale_pose(pose: RasterPose, factor: float) -> RasterPose:
 
 
 def clarify_frame(image: Image.Image, strength: float) -> Image.Image:
+    # clarity 是一个安全锐化步骤，用来提升主体细节，但尽量不伤透明边缘。
     if strength <= 0:
         return image
 
@@ -276,9 +293,7 @@ def clarify_frame(image: Image.Image, strength: float) -> Image.Image:
     if bbox is None:
         return rgba
 
-    # Keep the antialiased alpha edge stable while increasing detail inside the
-    # opaque painted body. This avoids the pale/dark fringe that straight RGBA
-    # sharpening can create around transparent sprites.
+    # 只在主体内部增强细节，保留抗锯齿 alpha 边缘，避免透明贴图出现亮边/黑边。
     box = expand_box(bbox, rgba.size, round(18 * rgba.width / BASE_CANVAS_SIZE))
     rgb = rgba.convert("RGB")
     original = rgb.crop(box)
@@ -307,6 +322,7 @@ def clarify_frame(image: Image.Image, strength: float) -> Image.Image:
 
 
 def choreograph_pose(state: str, timeline: float) -> RasterPose:
+    # 每个状态用几组关键帧描述“呼吸、偏移、倾斜、弹跳”等微动作。
     p = timeline % 1.0
     match state:
         case "idle":
@@ -435,6 +451,7 @@ def pose_from_keyframes(
     scale_y: list[tuple[float, float]] | None = None,
     lean: list[tuple[float, float]] | None = None,
 ) -> RasterPose:
+    # 把不同属性的关键帧统一采样成一帧 RasterPose。
     return RasterPose(
         x_offset=interpolate_keyframes(timeline, x or [(0.0, 0.0), (1.0, 0.0)]),
         y_offset=interpolate_keyframes(timeline, y or [(0.0, 0.0), (1.0, 0.0)]),
@@ -445,6 +462,7 @@ def pose_from_keyframes(
 
 
 def interpolate_keyframes(timeline: float, points: list[tuple[float, float]]) -> float:
+    # 关键帧之间用 smoothstep 插值，比线性插值更柔和。
     p = max(0.0, min(1.0, timeline))
     ordered = sorted(points, key=lambda item: item[0])
     if p <= ordered[0][0]:
@@ -458,11 +476,13 @@ def interpolate_keyframes(timeline: float, points: list[tuple[float, float]]) ->
 
 
 def smoothstep(value: float) -> float:
+    # 标准 smoothstep 曲线：两端速度趋近 0，动作不会突然启停。
     clamped = max(0.0, min(1.0, value))
     return clamped * clamped * (3.0 - 2.0 * clamped)
 
 
 def apply_anchored_scale(image: Image.Image, pose: RasterPose) -> Image.Image:
+    # 以主体底部为锚点缩放，这样宠物“站住”的感觉更稳定。
     alpha = image.getchannel("A")
     bbox = alpha.getbbox()
     if bbox is None:
@@ -489,6 +509,7 @@ def apply_anchored_scale(image: Image.Image, pose: RasterPose) -> Image.Image:
 
 
 def apply_same_layer_lean(image: Image.Image, lean_px: float) -> Image.Image:
+    # 倾斜用仿射变换完成，保持脸和身体仍在同一个位图层里。
     alpha = image.getchannel("A")
     bbox = alpha.getbbox()
     if bbox is None:
@@ -497,7 +518,7 @@ def apply_same_layer_lean(image: Image.Image, lean_px: float) -> Image.Image:
     left, top, right, bottom = expand_box(bbox, image.size, round(abs(lean_px)) + 6)
     subject = image.crop((left, top, right, bottom))
     height = max(1, subject.height)
-    # Affine shear keeps the face and body in one raster layer while the feet stay anchored.
+    # 横向 shear 让上半身倾斜，但尽量保持脚底锚定。
     coefficients = (1.0, lean_px / height, -lean_px, 0.0, 1.0, 0.0)
     leaned = subject.transform(subject.size, Image.Transform.AFFINE, coefficients, Image.Resampling.BICUBIC)
 
@@ -507,6 +528,7 @@ def apply_same_layer_lean(image: Image.Image, lean_px: float) -> Image.Image:
 
 
 def clear_corner_alpha(image: Image.Image) -> Image.Image:
+    # 透明窗口对四角脏像素很敏感，生成时直接把四角清掉。
     rgba = image.copy()
     alpha = rgba.getchannel("A")
     width, height = alpha.size
@@ -524,6 +546,7 @@ def clear_corner_alpha(image: Image.Image) -> Image.Image:
 
 
 def keep_primary_subject(image: Image.Image) -> Image.Image:
+    # 抠图后可能有碎片，保留最大的 alpha 连通区域作为主体。
     alpha = image.getchannel("A")
     mask = alpha.point(lambda value: 255 if value > 34 else 0)
     components = find_alpha_components(mask)
@@ -542,6 +565,7 @@ def keep_primary_subject(image: Image.Image) -> Image.Image:
 
 
 def remove_lower_detached_artifacts(frame: Image.Image) -> Image.Image:
+    # 这个清理函数保留主体和少量附着细节，丢掉下方孤立碎片。
     alpha = frame.getchannel("A")
     mask = alpha.point(lambda value: 255 if value > 34 else 0)
     components = find_alpha_components(mask)
@@ -569,6 +593,7 @@ def remove_lower_detached_artifacts(frame: Image.Image) -> Image.Image:
 
 
 def find_alpha_components(mask: Image.Image) -> list[dict[str, object]]:
+    # 简单 flood fill 找 alpha 连通区域，用于判断主体和碎片。
     width, height = mask.size
     data = mask.load()
     visited = bytearray(width * height)
@@ -614,6 +639,7 @@ def boxes_touch_or_overlap(
     second: tuple[int, int, int, int],
     margin: int,
 ) -> bool:
+    # 判断两个包围盒是否接触或在给定 margin 内相邻。
     first_left, first_top, first_right, first_bottom = first
     second_left, second_top, second_right, second_bottom = second
     return not (
@@ -625,6 +651,7 @@ def boxes_touch_or_overlap(
 
 
 def fit_subject_to_canvas(image: Image.Image, size: int, padding: int) -> Image.Image:
+    # 把主体按比例缩放后贴到统一画布底部，保留一点脚下空间。
     alpha = image.getchannel("A")
     bbox = alpha.getbbox()
     if bbox is None:
@@ -648,6 +675,7 @@ def fit_subject_to_canvas(image: Image.Image, size: int, padding: int) -> Image.
 
 
 def expand_box(box: tuple[int, int, int, int], size: tuple[int, int], margin: int) -> tuple[int, int, int, int]:
+    # 扩展包围盒时夹紧到画布范围内，避免 crop 越界。
     left, top, right, bottom = box
     width, height = size
     return (

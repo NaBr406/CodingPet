@@ -15,11 +15,13 @@ DEFAULT_PERSONALITY_PROMPT = "一个嘴毒但靠谱的资深工程师，能快�
 
 
 class ConfigError(Exception):
+    # 配置文件缺失、格式错误、字段类型不对时统一抛这个异常。
     pass
 
 
 @dataclass(frozen=True)
 class LLMConfig:
+    # LLM 接入配置：兼容 OpenAI SDK 的 base_url/api_key/model 名称。
     base_url: str
     api_key: str
     vision_model_name: str
@@ -28,17 +30,20 @@ class LLMConfig:
 
 @dataclass(frozen=True)
 class PetPresetConfig:
+    # 桌宠人设提示词，最终会进入 system prompt。
     personality_prompt: str
 
 
 @dataclass(frozen=True)
 class ChatConfig:
+    # 主动聊天的多轮开关和本次运行内记忆长度。
     multi_turn_enabled: bool
     memory_turns: int
 
 
 @dataclass(frozen=True)
 class ObserverConfig:
+    # 后台观察配置。ide_keywords 保留给兼容旧配置和未来过滤策略使用。
     global_observation_enabled: bool
     interval_seconds: int
     ide_keywords: tuple[str, ...]
@@ -46,6 +51,7 @@ class ObserverConfig:
 
 @dataclass(frozen=True)
 class CoreSettings:
+    # 设置界面会编辑的字段集合，和磁盘上的完整 config.yaml 不完全相同。
     base_url: str
     api_key: str
     vision_model_name: str
@@ -59,6 +65,7 @@ class CoreSettings:
 
 @dataclass(frozen=True)
 class RuntimeConfig:
+    # 纯运行时参数：请求超时、消息显示时间、随机心情、精灵尺寸边界等。
     request_timeout_seconds: float
     message_duration_ms: int
     state_reset_ms: int
@@ -72,6 +79,7 @@ class RuntimeConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
+    # 应用最终使用的完整配置对象，所有模块都从这里读取强类型配置。
     config_path: Path
     project_dir: Path
     llm: LLMConfig
@@ -82,6 +90,8 @@ class AppConfig:
 
     @property
     def assets_dir(self) -> Path:
+        # 打包后的程序会把资源塞进可执行文件旁边或临时解包目录，
+        # 本地开发则继续使用仓库里的 assets。
         bundled_assets_dir = resource_path("assets")
         if bundled_assets_dir.exists():
             return bundled_assets_dir
@@ -89,6 +99,10 @@ class AppConfig:
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> AppConfig:
+    # 配置加载不是简单读 YAML，而是要做三件事：
+    # 1. 找到实际应该读的文件
+    # 2. 把缺省值和历史兼容字段补齐
+    # 3. 将类型和取值范围校验干净
     config_path = _resolve_app_path(path)
     if not config_path.exists():
         _write_default_config(config_path, path)
@@ -161,6 +175,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> AppConfig:
 
 
 def core_settings_from_config(config: AppConfig) -> CoreSettings:
+    # 设置对话框只编辑一组“核心开关”，这里先把嵌套配置压平成平面结构，
+    # 方便 UI 直接读写，也避免界面层接触过多内部细节。
     return CoreSettings(
         base_url=config.llm.base_url,
         api_key=config.llm.api_key,
@@ -175,6 +191,7 @@ def core_settings_from_config(config: AppConfig) -> CoreSettings:
 
 
 def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
+    # 保存时要尽量保留其它未在 UI 中暴露的配置段，避免用户自定义内容被覆盖。
     config_path = _resolve_app_path(path)
     if config_path.exists():
         raw = _load_yaml_mapping(config_path)
@@ -271,6 +288,8 @@ def _string_list(value: Any, default: list[str]) -> list[str]:
 
 
 def _observer_enabled(observer_raw: dict[str, Any]) -> bool:
+    # 兼容早期配置里的 observer.enabled 写法，
+    # 新版本优先使用更明确的 global_observation_enabled。
     if "global_observation_enabled" in observer_raw:
         return _bool_value(observer_raw["global_observation_enabled"], "observer.global_observation_enabled")
     return _bool_value(observer_raw.get("enabled", True), "observer.enabled")
@@ -291,6 +310,7 @@ def _bool_value(value: Any, field_name: str) -> bool:
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    # YAML 读出来后先保证顶层一定是 dict，后续解析才能按 section 处理。
     with path.open("r", encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
     if not isinstance(raw, dict):
@@ -299,6 +319,7 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
 
 
 def application_dir() -> Path:
+    # 打包后以 exe 所在目录为准；源码运行时则回到当前模块目录。
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
@@ -316,11 +337,14 @@ def user_config_path() -> Path:
 
 
 def resource_path(relative_path: str | Path) -> Path:
+    # PyInstaller 环境会把资源解到 _MEIPASS；普通开发环境则直接走应用目录。
     base_dir = Path(getattr(sys, "_MEIPASS", application_dir()))
     return base_dir / relative_path
 
 
 def _resolve_app_path(path: str | Path) -> Path:
+    # 默认 config.yaml 的查找规则会因为“源码运行 / 打包运行”而不同，
+    # 这里统一收口，避免各模块自己拼路径。
     config_path = Path(path).expanduser()
     if not config_path.is_absolute():
         if _is_default_config_request(config_path) and getattr(sys, "frozen", False):
@@ -342,6 +366,8 @@ def _bundled_default_config_path(requested_path: str | Path) -> Path | None:
 
 
 def _write_default_config(config_path: Path, requested_path: str | Path) -> None:
+    # 当用户还没有自己的 config.yaml 时，直接从示例配置复制一份，
+    # 这样第一次启动就能跑起来，而不是让用户手工创建文件。
     default_config_path = _bundled_default_config_path(requested_path)
     if default_config_path is None:
         return

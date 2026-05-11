@@ -16,6 +16,7 @@ from logging_utils import LOGGER_NAME
 
 
 class ChatWorker(QThread):
+    # 主动聊天线程：负责截图、请求模型，并把结果通过 Qt 信号发回主线程。
     response_ready = pyqtSignal(str, str, str)
     request_failed = pyqtSignal(str)
 
@@ -33,6 +34,8 @@ class ChatWorker(QThread):
     def run(self) -> None:
         logger = logging.getLogger(LOGGER_NAME)
         try:
+            # 主动聊天默认也能附带截图，但只有在全局观测开关打开时才抓取，
+            # 这样可以把“是否看图”统一收进一个配置开关里。
             screenshot_base64 = None
             if self._config.observer.global_observation_enabled:
                 screenshot_base64 = self._capture_screen()
@@ -52,12 +55,15 @@ class ChatWorker(QThread):
     def _capture_screen(self) -> str | None:
         logger = logging.getLogger(LOGGER_NAME)
         try:
+            # 主动聊天截的是主屏幕，目的不是做全局录屏，而是把当前上下文
+            # 交给模型，减少用户重复描述屏幕内容。
             with mss() as screen_capture:
                 screenshot = screen_capture.grab(screen_capture.monitors[1])
         except Exception:
             logger.warning("主动聊天截图失败，已改为纯文本发送。", exc_info=True)
             return None
 
+        # 先缩图再编码，能明显减少请求体积，也更适合模型输入。
         image = Image.frombytes("RGB", screenshot.size, screenshot.rgb)
         image.thumbnail((1600, 900), Image.Resampling.LANCZOS)
 

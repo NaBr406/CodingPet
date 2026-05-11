@@ -9,6 +9,7 @@ from PIL import Image, ImageChops
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = PROJECT_DIR / "assets"
 if str(PROJECT_DIR) not in sys.path:
+    # 从 tools 目录执行时，把项目根目录加入导入路径，方便复用 PetState。
     sys.path.insert(0, str(PROJECT_DIR))
 
 from pet_state import PetState
@@ -23,6 +24,7 @@ CORNER_SIZE = 8
 
 
 def main() -> int:
+    # 逐状态检查动画资源：数量、尺寸、透明度、主体稳定性和动作变化量。
     failures: list[str] = []
     for state in PetState:
         frame_dir = ASSETS_DIR / state.value
@@ -38,6 +40,7 @@ def main() -> int:
             with Image.open(frame_path) as image:
                 rgba = image.convert("RGBA")
             width, height = rgba.size
+            # 运行时按正方形画布缩放，非正方形帧会导致定位和缩放不稳定。
             if width != height:
                 failures.append(f"{state.value}/{frame_path.name}: expected square frame, found {width}x{height}")
             if first_frame is None:
@@ -67,6 +70,7 @@ def main() -> int:
             centers.append(((left + right) / 2, (top + bottom) / 2))
 
         if centers:
+            # 主体中心如果跳得太厉害，桌宠播放时会看起来像在抖。
             frame_scale = first_frame.width / BASE_CANVAS_SIZE if first_frame is not None else 1.0
             avg_x = sum(x for x, _ in centers) / len(centers)
             avg_y = sum(y for _, y in centers) / len(centers)
@@ -82,6 +86,7 @@ def main() -> int:
                 failures.append(f"{state.value}: frame-to-frame center jump too high ({max_step:.1f})")
 
             if changed_frames < MIN_CHANGED_FRAMES:
+                # 至少要有一定数量的帧真正变化，避免“动画目录里全是同一张图”。
                 failures.append(
                     f"{state.value}: animation is too static ({changed_frames} changed frames)"
                 )
@@ -96,6 +101,7 @@ def main() -> int:
 
 
 def corners_are_transparent(alpha: Image.Image) -> bool:
+    # 透明窗口最怕角落残留脏像素，这里专门检查四角。
     width, height = alpha.size
     corner_size = max(CORNER_SIZE, round(CORNER_SIZE * width / BASE_CANVAS_SIZE))
     corners = (
@@ -111,6 +117,7 @@ def corners_are_transparent(alpha: Image.Image) -> bool:
 
 
 def count_alpha_values(alpha: Image.Image, threshold: int) -> int:
+    # 用 alpha 直方图统计可见像素，比逐像素循环更快。
     histogram = alpha.histogram()
     return sum(histogram[threshold + 1 :])
 

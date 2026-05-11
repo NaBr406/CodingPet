@@ -10,6 +10,7 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 ASSETS_DIR = PROJECT_DIR / "assets"
 REFERENCE_DIR = ASSETS_DIR / "reference"
 if str(PROJECT_DIR) not in sys.path:
+    # 脚本在 tools/ 里运行时，需要把项目根目录加回模块搜索路径。
     sys.path.insert(0, str(PROJECT_DIR))
 
 from pet_state import PetState
@@ -26,6 +27,7 @@ BACKGROUND_B = (218, 225, 233, 255)
 
 
 def main() -> int:
+    # 生成一张总览图，方便一次性检查所有状态的关键帧。
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
     output_path = REFERENCE_DIR / "animation-preview-sheet.png"
 
@@ -36,10 +38,12 @@ def main() -> int:
     draw = ImageDraw.Draw(sheet)
 
     for column, frame_index in enumerate(SAMPLE_INDICES):
+        # 顶部显示抽样帧编号，便于和真实 frame_XX.png 对照。
         x = LEFT_LABEL_WIDTH + column * (CELL_SIZE + COL_GAP)
         draw.text((x + 6, 6), f"f{frame_index:02d}", fill=(65, 74, 86, 255), font=font)
 
     for row, state in enumerate(PetState):
+        # 每个状态抽取固定几个帧点，快速看动作是否连续、透明边缘是否干净。
         y = LABEL_HEIGHT + row * (CELL_SIZE + ROW_GAP)
         draw.text((8, y + 54), state.value, fill=(28, 35, 45, 255), font=font)
         for column, frame_index in enumerate(SAMPLE_INDICES):
@@ -62,6 +66,7 @@ def main() -> int:
 
 
 def checkerboard(width: int, height: int) -> Image.Image:
+    # 棋盘背景用于看透明像素和边缘残留，比纯白背景更容易发现问题。
     image = Image.new("RGBA", (width, height), BACKGROUND_A)
     draw = ImageDraw.Draw(image)
     block = 16
@@ -73,6 +78,7 @@ def checkerboard(width: int, height: int) -> Image.Image:
 
 
 def draw_missing_cell(cell: Image.Image) -> None:
+    # 缺帧用红叉标出，预览图里会非常醒目。
     draw = ImageDraw.Draw(cell)
     draw.line((18, 18, CELL_SIZE - 18, CELL_SIZE - 18), fill=(210, 90, 90, 255), width=3)
     draw.line((CELL_SIZE - 18, 18, 18, CELL_SIZE - 18), fill=(210, 90, 90, 255), width=3)

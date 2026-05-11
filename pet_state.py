@@ -4,6 +4,7 @@ from enum import Enum
 
 
 class PetState(str, Enum):
+    # 枚举值同时对应资源目录名，例如 assets/happy/frame_00.png。
     IDLE = "idle"
     GREETING = "greeting"
     LISTENING = "listening"
@@ -22,10 +23,12 @@ class PetState(str, Enum):
 
     @property
     def asset_filename(self) -> str:
+        # 单帧资源的默认文件名；如果存在同名目录，则 UI 会优先加载动画帧。
         return f"{self.value}.webp"
 
     @classmethod
     def from_emotion(cls, value: str | None) -> "PetState":
+        # 模型输出不一定完全等于枚举名，所以这里集中维护一组同义词映射。
         token = (value or "").strip().upper()
         mapping = {
             "IDLE": cls.IDLE,
@@ -69,6 +72,7 @@ class PetState(str, Enum):
         return mapping.get(token, cls.IDLE)
 
 
+# 随机心情只选适合自然轮播的状态，不包含拖拽、缩放这类交互态。
 RANDOM_MOOD_STATES = (
     PetState.IDLE,
     PetState.THINKING,

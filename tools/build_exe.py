@@ -35,6 +35,7 @@ PET_STATES = (
 
 
 def main() -> int:
+    # 打包流程分三步：准备图标、整理运行时资源、调用 PyInstaller。
     _ensure_icon()
     _stage_runtime_assets()
     _build_exe()
@@ -45,6 +46,7 @@ def main() -> int:
 
 
 def _ensure_icon() -> None:
+    # Windows 可执行文件需要 .ico，这里从现有宠物图生成多尺寸图标。
     if not ICON_PNG.exists():
         raise FileNotFoundError(f"Icon source not found: {ICON_PNG}")
 
@@ -64,6 +66,7 @@ def _ensure_icon() -> None:
 
 
 def _build_exe() -> None:
+    # 使用当前 Python 环境里的 PyInstaller，确保依赖和解释器与项目环境一致。
     command = [
         sys.executable,
         "-m",
@@ -80,6 +83,7 @@ def _build_exe() -> None:
         f"{RUNTIME_ASSETS_DIR};assets",
         "--exclude-module",
         "numpy",
+        # 这些大体积模块不是运行桌宠所需，排除后能显著减小 exe 体积。
         "--exclude-module",
         "torch",
         "--exclude-module",
@@ -96,12 +100,14 @@ def _build_exe() -> None:
 
 
 def _stage_runtime_assets() -> None:
+    # 只把运行时需要的资源拷到临时目录，再交给 PyInstaller 打包。
     if RUNTIME_ASSETS_DIR.exists():
         shutil.rmtree(RUNTIME_ASSETS_DIR)
     RUNTIME_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     shutil.copy2(ICON_ICO, RUNTIME_ASSETS_DIR / ICON_ICO.name)
     for state in PET_STATES:
+        # 兼容单帧资源和动画帧目录两种形态。
         _copy_if_exists(PROJECT_DIR / "assets" / f"{state}.png", RUNTIME_ASSETS_DIR / f"{state}.png")
         state_source_dir = PROJECT_DIR / "assets" / state
         state_target_dir = RUNTIME_ASSETS_DIR / state
@@ -111,6 +117,7 @@ def _stage_runtime_assets() -> None:
 
 
 def _copy_if_exists(source: Path, target: Path) -> None:
+    # 某些状态可能只有动画目录，没有单帧图；不存在就安静跳过。
     if source.exists():
         shutil.copy2(source, target)
 

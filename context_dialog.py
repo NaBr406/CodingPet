@@ -20,6 +20,7 @@ from conversation_history import PASSIVE_CHAT_SOURCE, ChatTurn
 
 
 class ContextDialog(QDialog):
+    # 展示本次运行内的主动聊天和被动观察记录，并允许继续发送消息。
     submitted = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -115,6 +116,8 @@ class ContextDialog(QDialog):
         multi_turn_enabled: bool,
         memory_turns: int,
     ) -> None:
+        # 这里展示的是“本次运行中的对话记录”，不是永久历史。
+        # 所以每次刷新都由当前内存中的 chat history 直接重建。
         self._set_badge_text(
             self._multi_turn_badge,
             "多轮已开启" if multi_turn_enabled else "多轮未开启",
@@ -126,6 +129,7 @@ class ContextDialog(QDialog):
         QTimer.singleShot(0, self._scroll_to_bottom)
 
     def set_sending(self, sending: bool) -> None:
+        # 发送态下禁用输入，避免用户连续发起多次请求把状态打乱。
         self._input.setEnabled(not sending)
         self._send_button.setEnabled(not sending)
         self._send_button.setText("发送中" if sending else "发送")
@@ -145,6 +149,7 @@ class ContextDialog(QDialog):
         self.submitted.emit(text)
 
     def _rebuild_history_view(self, history: Sequence[ChatTurn]) -> None:
+        # 采用整块重建而不是局部 diff，代码更直白，也足够应对当前记录量。
         self._clear_history_layout()
         if not history:
             self._history_layout.addStretch(1)
@@ -168,6 +173,7 @@ class ContextDialog(QDialog):
                 widget.deleteLater()
 
     def _build_turn_card(self, index: int, turn: ChatTurn) -> QWidget:
+        # 主动聊天和被动观察虽然都进历史，但展示策略略有不同。
         passive = turn.source == PASSIVE_CHAT_SOURCE
         card = QFrame()
         card.setObjectName("TurnCard")
@@ -192,6 +198,7 @@ class ContextDialog(QDialog):
         card_layout.addWidget(header)
 
         if passive:
+            # 被动观察会把“窗口标题”放进观察到的内容里，和普通用户输入区分开。
             card_layout.addWidget(
                 self._build_message_row(
                     "观察到",
@@ -264,6 +271,7 @@ class ContextDialog(QDialog):
         bubble_layout.addWidget(body_label)
 
         if fill_width:
+            # 观察记录通常更长，直接让气泡铺满可读性会更好。
             row_layout.addWidget(bubble, 1)
         elif align_right:
             row_layout.addStretch(2)
@@ -274,6 +282,7 @@ class ContextDialog(QDialog):
         return row
 
     def _build_empty_state(self) -> QWidget:
+        # 空状态不是为了装饰，而是说明这里会记录什么、下一步该怎么触发记录。
         empty = QFrame()
         empty.setObjectName("EmptyState")
         empty.setMaximumWidth(460)
@@ -316,6 +325,7 @@ class ContextDialog(QDialog):
         scroll_bar.setValue(scroll_bar.maximum())
 
     def _observation_text(self, text: str) -> str:
+        # 被动观察的 user 字段里带了一个统一前缀，这里剥掉后更适合展示。
         prefix = "被动观察："
         if text.startswith(prefix):
             return text[len(prefix):].strip() or "当前窗口"

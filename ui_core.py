@@ -60,7 +60,7 @@ def _remove_system_window_outline(widget: QWidget) -> None:
         import ctypes
         from ctypes import wintypes
 
-        # Windows can draw a 1px DWM outline around transparent frameless windows.
+        # Windows 的透明无边框窗口有时会被 DWM 额外描一圈细边，这里顺手关掉。
         hwnd = wintypes.HWND(int(widget.winId()))
         dwm_set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
 
@@ -87,6 +87,7 @@ def _remove_system_window_outline(widget: QWidget) -> None:
 
 
 class BubbleMessageWidget(QWidget):
+    # 跟随宠物窗口的消息气泡，负责自动换边、计时隐藏和透明绘制。
     def __init__(self) -> None:
         super().__init__(None, WINDOW_FLAGS | Qt.WindowType.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -115,6 +116,7 @@ class BubbleMessageWidget(QWidget):
             self._place_near_anchor()
 
     def show_message(self, text: str, duration_ms: int = 5000) -> None:
+        # 气泡消息总是围绕锚点重新计算尺寸和位置，确保不会漂出屏幕。
         message = text.strip()
         if not message:
             self.hide()
@@ -170,6 +172,7 @@ class BubbleMessageWidget(QWidget):
         )
 
     def _place_near_anchor(self) -> None:
+        # 优先把气泡放到宠物右侧，放不下再换到左侧。
         if self._anchor_rect.isNull():
             return
 
@@ -193,6 +196,7 @@ class BubbleMessageWidget(QWidget):
 
 
 class ChatInputWidget(QWidget):
+    # 跟随宠物窗口的临时输入浮层，提交后通过 signal 交给控制器。
     submitted = pyqtSignal(str)
     cancelled = pyqtSignal()
 
@@ -230,6 +234,7 @@ class ChatInputWidget(QWidget):
             self._place_near_anchor()
 
     def show_input(self) -> None:
+        # 输入框是临时浮层，显示后马上聚焦，用户可以直接敲字。
         self._line_edit.clear()
         self._place_near_anchor()
         self.show()
@@ -239,6 +244,7 @@ class ChatInputWidget(QWidget):
         self._line_edit.setFocus()
 
     def eventFilter(self, watched: object, event: QEvent) -> bool:
+        # Escape 负责取消输入，失去焦点则延迟判断一次，避免误把弹窗切走当作提交。
         if watched is self._line_edit and event.type() == QEvent.Type.KeyPress:
             key_event = event
             if getattr(key_event, "key", lambda: None)() == Qt.Key.Key_Escape:
@@ -280,6 +286,7 @@ class ChatInputWidget(QWidget):
 
 
 class PetSpriteLabel(QLabel):
+    # 真正承载宠物图像和鼠标事件的透明控件。
     drag_pressed = pyqtSignal(object)
     drag_moved = pyqtSignal(object)
     drag_released = pyqtSignal(object)
@@ -305,6 +312,7 @@ class PetSpriteLabel(QLabel):
     def paintEvent(self, event: QEvent) -> None:
         _ = event
         painter = QPainter(self)
+        # 先清空再画，避免透明背景下出现残影。
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
         painter.fillRect(self.rect(), Qt.GlobalColor.transparent)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
@@ -319,6 +327,7 @@ class PetSpriteLabel(QLabel):
             painter.drawPixmap(target, self._sprite_pixmap)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
+        # 左键负责拖动，右键根据移动距离判断是缩放还是弹出菜单。
         if event.button() == Qt.MouseButton.LeftButton:
             self.drag_pressed.emit(event)
         elif event.button() == Qt.MouseButton.RightButton:
@@ -371,6 +380,7 @@ class PetSpriteLabel(QLabel):
 
 
 class PetWindow(QWidget):
+    # 桌宠主窗口：组合精灵、气泡、输入框、右键菜单、拖拽缩放和动画播放。
     chat_submitted = pyqtSignal(str)
     chat_opened = pyqtSignal()
     chat_cancelled = pyqtSignal()
@@ -398,6 +408,7 @@ class PetWindow(QWidget):
         self._animation_timer = QTimer(self)
         self._animation_timer.timeout.connect(self._advance_animation_frame)
 
+        # 这个窗口本体只承载透明画布，实际交互区域都交给 sprite、气泡和输入框。
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAutoFillBackground(False)
         self.setStyleSheet("background: transparent; border: none;")
@@ -430,12 +441,14 @@ class PetWindow(QWidget):
         self.set_state(PetState.IDLE)
 
     def update_config(self, config: AppConfig) -> None:
+        # 配置更新后要重新对齐尺寸边界，并刷新当前帧。
         self._config = config
         self._config.assets_dir.mkdir(parents=True, exist_ok=True)
         self._sprite_size = self._clamp_sprite_size(self._sprite_size)
         self._apply_animation_frame()
 
     def set_state(self, state: PetState | str) -> None:
+        # 状态切换时先加载对应资源，再决定是否开启帧动画。
         normalized = state if isinstance(state, PetState) else PetState.from_emotion(state)
         self._animation_frames = self._load_state_frames(normalized)
         if not self._animation_frames:
@@ -454,6 +467,7 @@ class PetWindow(QWidget):
         self._bubble.show_message(text, duration_ms or self._config.runtime.message_duration_ms)
 
     def show_chat_input(self) -> None:
+        # 双击宠物打开聊天输入浮层。
         self._chat_input.set_anchor_rect(self.frameGeometry())
         self._chat_input.show_input()
         self.chat_opened.emit()
@@ -466,6 +480,7 @@ class PetWindow(QWidget):
         super().showEvent(event)
         _remove_system_window_outline(self)
         if not self._positioned:
+            # 第一次显示时把宠物放到屏幕右下角附近，避免遮住主工作区。
             self._move_to_default_position()
             self._positioned = True
         self._refresh_overlay_positions()
@@ -482,6 +497,7 @@ class PetWindow(QWidget):
         self._chat_input.set_anchor_rect(anchor)
 
     def _show_context_menu(self, global_pos: QPoint) -> None:
+        # 右键菜单只提供最常用的三个动作：上下文、设置、退出。
         menu = QMenu(self)
         menu.setStyleSheet(
             """
@@ -515,6 +531,7 @@ class PetWindow(QWidget):
             sys.exit(0)
 
     def _start_drag(self, event: QMouseEvent) -> None:
+        # 先检查鼠标是否在边缘，边缘就是缩放，不是拖动。
         resize_edges = self._resize_edges_at(event.position().toPoint())
         if resize_edges:
             self._begin_edge_resize(event, resize_edges)
@@ -553,6 +570,7 @@ class PetWindow(QWidget):
         self._begin_edge_resize(event, edges)
 
     def _begin_edge_resize(self, event: QMouseEvent, edges: int) -> None:
+        # 边缘缩放要同时记录起始尺寸和起始几何，后面才能正确回推位置。
         self._resize_start_pos = event.globalPosition().toPoint()
         self._resize_start_size = self._sprite_size
         self._resize_start_geometry = self.frameGeometry()
@@ -578,6 +596,7 @@ class PetWindow(QWidget):
             self.resize_finished.emit()
 
     def _edge_resize_move(self, event: QMouseEvent) -> None:
+        # 这里允许从单边或双边同时缩放，取可行尺寸里的最大值保持窗口不塌。
         if self._resize_start_pos is None or not (
             event.buttons() & (Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
         ):
@@ -614,6 +633,7 @@ class PetWindow(QWidget):
         return self._sprite_size
 
     def _set_sprite_size(self, size: int) -> None:
+        # 所有缩放最终都走统一裁剪，再让当前动画帧跟着重绘。
         self._sprite_size = self._clamp_sprite_size(size)
         self._apply_animation_frame()
 
@@ -662,6 +682,7 @@ class PetWindow(QWidget):
         )
 
     def _load_state_pixmap(self, state: PetState) -> QPixmap:
+        # 单帧状态优先查缓存，再按状态名找单张资源，最后回退到占位图。
         if state in self._pixmap_cache:
             return self._pixmap_cache[state]
 
@@ -689,6 +710,7 @@ class PetWindow(QWidget):
         return self._config.assets_dir / state.asset_filename
 
     def _load_state_frames(self, state: PetState) -> list[QPixmap]:
+        # 如果状态目录下有 frame_* 序列，就按动画帧加载；否则退回单图。
         if state in self._frame_cache:
             return self._frame_cache[state]
 
@@ -743,6 +765,7 @@ class PetWindow(QWidget):
         )
 
     def _apply_animation_frame(self) -> None:
+        # 把当前帧缩放到统一尺寸后，更新 sprite 与窗口本体大小。
         if not self._animation_frames:
             return
 
@@ -755,6 +778,7 @@ class PetWindow(QWidget):
         self._refresh_overlay_positions()
 
     def _advance_animation_frame(self) -> None:
+        # 动画帧是循环播放的，计时器每次触发推进一帧。
         if len(self._animation_frames) <= 1:
             return
 
@@ -762,6 +786,7 @@ class PetWindow(QWidget):
         self._apply_animation_frame()
 
     def _build_placeholder_pixmap(self) -> QPixmap:
+        # 没有资源时用一个简单的占位图，至少保证界面能跑起来。
         pixmap = QPixmap(240, 240)
         pixmap.fill(Qt.GlobalColor.transparent)
 
@@ -784,6 +809,7 @@ class PetWindow(QWidget):
 
 
 def run_preview(config_path: str = "config.yaml") -> int:
+    # 预览模式只负责展示宠物窗口，不接控制器和后台线程。
     setup_logging()
     logger = logging.getLogger(LOGGER_NAME)
     config = load_config(config_path)

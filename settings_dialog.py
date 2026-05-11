@@ -31,6 +31,7 @@ MENU_ANIMATION_MS = 180
 
 
 class SettingsDialog(QDialog):
+    # 设置窗口只负责收集和校验输入，保存/重载配置由主控制器完成。
     def __init__(self, config: AppConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._config = config
@@ -79,6 +80,7 @@ class SettingsDialog(QDialog):
         self._apply_style()
 
     def core_settings(self) -> CoreSettings:
+        # 对话框只负责收集可编辑核心项，真正写回配置时再由外层决定如何刷新运行态。
         return CoreSettings(
             base_url=self._base_url_edit.text().strip(),
             api_key=self._api_key_edit.text().strip(),
@@ -92,6 +94,7 @@ class SettingsDialog(QDialog):
         )
 
     def accept(self) -> None:
+        # 先做本地校验，再允许关闭对话框，避免把明显错误写回磁盘。
         try:
             settings = self.core_settings()
             self._validate_settings(settings)
@@ -101,6 +104,7 @@ class SettingsDialog(QDialog):
         super().accept()
 
     def _build_layout(self) -> None:
+        # 设置页采用左侧分类菜单 + 右侧内容页的结构，便于后续继续扩展。
         title = QLabel("设置")
         title.setObjectName("DialogTitle")
         subtitle = QLabel("配置模型、人设和全局监听，保存后会立即应用到新的聊天和观察任务。")
@@ -184,6 +188,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self._buttons)
 
     def _toggle_menu(self) -> None:
+        # 菜单不是简单 show/hide，而是顺手做一个宽度和透明度过渡，减少界面突兀感。
         if self._menu_panel is None or self._menu_effect is None:
             return
 
@@ -242,6 +247,7 @@ class SettingsDialog(QDialog):
             self._section_stack.setCurrentIndex(index)
 
     def _build_section_page(self, title: str) -> tuple[QWidget, QVBoxLayout]:
+        # 每个设置页都共享同一套标题和边距结构，避免页面之间视觉碎裂。
         page = QWidget()
         page.setObjectName("SectionPage")
         layout = QVBoxLayout(page)
@@ -254,6 +260,7 @@ class SettingsDialog(QDialog):
         return page, layout
 
     def _build_model_group(self) -> QWidget:
+        # 模型配置影响所有请求，是最核心的运行入口。
         group, layout = self._build_section_page("模型配置")
         layout.addWidget(self._build_field(
             "接口地址",
@@ -279,6 +286,7 @@ class SettingsDialog(QDialog):
         return group
 
     def _build_preset_group(self) -> QWidget:
+        # 人设是模型回复风格的入口，留空时会退回默认值。
         group, layout = self._build_section_page("人设设置")
         layout.addWidget(self._build_field(
             "人设提示词",
@@ -289,6 +297,7 @@ class SettingsDialog(QDialog):
         return group
 
     def _build_chat_group(self) -> QWidget:
+        # 多轮只保存当前运行期间的对话记忆，不做长期持久化。
         group, layout = self._build_section_page("多轮对话")
         layout.addWidget(self._multi_turn_enabled_check)
         layout.addWidget(self._build_field(
@@ -300,6 +309,7 @@ class SettingsDialog(QDialog):
         return group
 
     def _build_observer_group(self) -> QWidget:
+        # 全局监听决定是否持续观察前台窗口。
         group, layout = self._build_section_page("全局监听")
         layout.addWidget(self._observation_enabled_check)
         layout.addWidget(self._build_field(
@@ -325,6 +335,7 @@ class SettingsDialog(QDialog):
         return block
 
     def _build_api_key_row(self) -> QWidget:
+        # API Key 默认隐藏，只有需要时才手动展开查看。
         show_key_check = QCheckBox("显示")
         show_key_check.toggled.connect(self._toggle_api_key_visibility)
 
@@ -337,6 +348,7 @@ class SettingsDialog(QDialog):
         return row
 
     def _build_interval_row(self) -> QWidget:
+        # 监听间隔提供步进按钮，方便用户快速微调而不是反复手敲数字。
         seconds_label = QLabel("秒")
         seconds_label.setObjectName("IntervalUnit")
 
@@ -364,6 +376,7 @@ class SettingsDialog(QDialog):
         return row
 
     def _build_memory_turns_row(self) -> QWidget:
+        # 记忆轮数限制在 1 到 20 之间，避免把历史存得过短或过长。
         unit_label = QLabel("轮")
         unit_label.setObjectName("MemoryTurnsUnit")
 
@@ -382,10 +395,12 @@ class SettingsDialog(QDialog):
         return hint
 
     def _toggle_api_key_visibility(self, checked: bool) -> None:
+        # 这里不改值，只切换显示方式，防止误操作破坏输入内容。
         mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
         self._api_key_edit.setEchoMode(mode)
 
     def _interval_seconds(self) -> int:
+        # 文本框输入先按整数解析，失败就给出明确错误提示。
         raw_value = self._interval_edit.text().strip()
         if not raw_value:
             raise ValueError("监听间隔不能为空。")
@@ -395,6 +410,7 @@ class SettingsDialog(QDialog):
             raise ValueError("监听间隔必须是数字。") from exc
 
     def _memory_turns(self) -> int:
+        # 记忆轮数同样要走显式解析，避免空字符串或脏输入悄悄混进配置。
         raw_value = self._memory_turns_edit.text().strip()
         if not raw_value:
             raise ValueError("记忆轮数不能为空。")
@@ -404,6 +420,7 @@ class SettingsDialog(QDialog):
             raise ValueError("记忆轮数必须是数字。") from exc
 
     def _set_interval_seconds(self, value: int) -> None:
+        # 步进按钮最终还是要回到统一的范围约束。
         clamped = max(INTERVAL_MIN_SECONDS, min(INTERVAL_MAX_SECONDS, value))
         self._interval_edit.setText(str(clamped))
 
@@ -415,6 +432,8 @@ class SettingsDialog(QDialog):
         self._set_interval_seconds(value + delta)
 
     def _validate_settings(self, settings: CoreSettings) -> None:
+        # 这里做的是界面层校验，不替代 config_loader 里的结构校验，
+        # 只是尽早给用户更直接的错误提示。
         if not settings.base_url:
             raise ValueError("接口地址不能为空。")
         if not settings.vision_model_name:

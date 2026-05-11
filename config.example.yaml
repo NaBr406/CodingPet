@@ -1,29 +1,44 @@
+# CodingPet 默认配置模板。
+# 首次启动没有 config.yaml 时，程序会从这份文件复制一份作为用户配置。
 llm:
+  # OpenAI 兼容接口地址，通常以 /v1 结尾。
   base_url: "https://token-plan-cn.xiaomimimo.com/v1"
+  # 本地实际配置请填自己的密钥；模板里保持为空，避免误提交敏感信息。
   api_key: ""
+  # 视觉模型用于截图聊天和后台观察，需要支持 image_url。
   vision_model_name: "mimo-v2.5"
+  # 聊天模型用于纯文本对话，也会作为视觉请求失败后的降级模型。
   chat_model_name: "mimo-v2.5-pro"
 
 pet_preset:
+  # 桌宠人设提示词；设置界面留空保存时会回退到默认人设。
   personality_prompt: "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
 
 chat:
   # 是否开启多轮对话：开启后主动聊天会携带本次运行内最近 memory_turns 条上下文。
   multi_turn_enabled: false
+  # 本次运行内最多保留多少条上下文记录，关闭应用后不会持久化。
   memory_turns: 5
 
 observer:
   # 是否开启全局观测：开启后会定时观察当前前台窗口，也会在主动聊天时附带当前屏幕截图。
   global_observation_enabled: true
+  # 全局观测间隔，单位为秒；实际加载时最低会被限制为 5 秒。
   interval_seconds: 300
 
 runtime:
+  # 单次模型请求超时时间，单位为秒。
   request_timeout_seconds: 20
+  # 气泡消息默认显示时长，单位为毫秒。
   message_duration_ms: 7000
+  # 模型回复后宠物状态保持多久再回到 idle，单位为毫秒。
   state_reset_ms: 6000
+  # 空闲时是否启用随机心情切换。
   random_mood_enabled: true
+  # 随机心情切换的最短/最长等待时间，单位为秒。
   random_mood_min_seconds: 8
   random_mood_max_seconds: 20
+  # 桌宠默认尺寸和用户可缩放尺寸边界，单位为像素。
   sprite_size: 300
   sprite_min_size: 160
   sprite_max_size: 560
