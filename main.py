@@ -5,6 +5,7 @@ import random
 import sys
 
 from PyQt6.QtCore import QObject, QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from chat_thread import ChatWorker
@@ -336,6 +337,9 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("CodingPet")
+    icon_path = config.assets_dir / "codingpet.ico"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     controller = CodingPetController(config)
     app.aboutToQuit.connect(controller.shutdown)

@@ -4,3 +4,4 @@ mss
 pygetwindow
 openai
 PyYAML
+PyInstaller

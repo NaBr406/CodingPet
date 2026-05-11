@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Any
 
 import yaml
@@ -78,16 +79,19 @@ class AppConfig:
 
     @property
     def assets_dir(self) -> Path:
+        bundled_assets_dir = resource_path("assets")
+        if bundled_assets_dir.exists():
+            return bundled_assets_dir
         return self.project_dir / "assets"
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
-    config_path = Path(path).expanduser().resolve()
-    if not config_path.exists():
+    config_path = _resolve_app_path(path)
+    source_path = config_path if config_path.exists() else _bundled_default_config_path(path)
+    if source_path is None:
         raise ConfigError(f"Config file not found: {config_path}")
 
-    with config_path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle) or {}
+    raw = _load_yaml_mapping(source_path)
 
     llm_raw = _read_section(raw, "llm")
     preset_raw = _optional_section(raw, "pet_preset")
@@ -168,13 +172,11 @@ def core_settings_from_config(config: AppConfig) -> CoreSettings:
 
 def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     config_path = Path(path).expanduser().resolve()
-    if not config_path.exists():
-        raise ConfigError(f"Config file not found: {config_path}")
-
-    with config_path.open("r", encoding="utf-8") as handle:
-        raw = yaml.safe_load(handle) or {}
-    if not isinstance(raw, dict):
-        raise ConfigError("Config file root must be a mapping")
+    if config_path.exists():
+        raw = _load_yaml_mapping(config_path)
+    else:
+        default_config_path = resource_path("config.example.yaml")
+        raw = _load_yaml_mapping(default_config_path) if default_config_path.exists() else {}
 
     llm_raw = _ensure_section(raw, "llm")
     preset_raw = _ensure_section(raw, "pet_preset")
@@ -199,6 +201,7 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     observer_raw["global_observation_enabled"] = bool(settings.global_observation_enabled)
     observer_raw["interval_seconds"] = interval_seconds
 
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     with config_path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(raw, handle, allow_unicode=True, sort_keys=False)
 
@@ -281,3 +284,40 @@ def _bool_value(value: Any, field_name: str) -> bool:
         if lowered in {"false", "no", "off", "0"}:
             return False
     raise ConfigError(f"Invalid boolean config value: {field_name}")
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+    if not isinstance(raw, dict):
+        raise ConfigError("Config file root must be a mapping")
+    return raw
+
+
+def application_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def resource_path(relative_path: str | Path) -> Path:
+    base_dir = Path(getattr(sys, "_MEIPASS", application_dir()))
+    return base_dir / relative_path
+
+
+def _resolve_app_path(path: str | Path) -> Path:
+    config_path = Path(path).expanduser()
+    if not config_path.is_absolute():
+        config_path = application_dir() / config_path
+    return config_path.resolve()
+
+
+def _bundled_default_config_path(requested_path: str | Path) -> Path | None:
+    requested = Path(requested_path)
+    if requested.name != "config.yaml":
+        return None
+
+    candidate = resource_path("config.example.yaml")
+    if candidate.exists():
+        return candidate
+    return None

@@ -1,2 +1,19 @@
 # Local configuration
 config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+
+# Runtime logs
+*.log
+
+# Build and packaging output
+build/
+dist/
+*.spec
+
+# Local asset preparation output
+assets/live2d-prep/
