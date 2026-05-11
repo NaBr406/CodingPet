@@ -504,11 +504,15 @@ class PetWindow(QWidget):
         )
         context_action = menu.addAction("查看上下文")
         settings_action = menu.addAction("设置")
+        exit_action = menu.addAction("退出")
         selected_action = menu.exec(global_pos)
         if selected_action == context_action:
             self.context_requested.emit()
         elif selected_action == settings_action:
             self.settings_requested.emit()
+        elif selected_action == exit_action:
+            logging.info("退出")
+            sys.exit(0)
 
     def _start_drag(self, event: QMouseEvent) -> None:
         resize_edges = self._resize_edges_at(event.position().toPoint())

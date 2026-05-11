@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 import yaml
 
 
+APP_NAME = "CodingPet"
+DEFAULT_CONFIG_FILENAME = "config.yaml"
 DEFAULT_PERSONALITY_PROMPT = "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
 
 
@@ -85,13 +88,14 @@ class AppConfig:
         return self.project_dir / "assets"
 
 
-def load_config(path: str | Path = "config.yaml") -> AppConfig:
+def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> AppConfig:
     config_path = _resolve_app_path(path)
-    source_path = config_path if config_path.exists() else _bundled_default_config_path(path)
-    if source_path is None:
+    if not config_path.exists():
+        _write_default_config(config_path, path)
+    if not config_path.exists():
         raise ConfigError(f"Config file not found: {config_path}")
 
-    raw = _load_yaml_mapping(source_path)
+    raw = _load_yaml_mapping(config_path)
 
     llm_raw = _read_section(raw, "llm")
     preset_raw = _optional_section(raw, "pet_preset")
@@ -171,7 +175,7 @@ def core_settings_from_config(config: AppConfig) -> CoreSettings:
 
 
 def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
-    config_path = Path(path).expanduser().resolve()
+    config_path = _resolve_app_path(path)
     if config_path.exists():
         raw = _load_yaml_mapping(config_path)
     else:
@@ -300,6 +304,17 @@ def application_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def user_config_dir() -> Path:
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / APP_NAME
+    return Path.home() / "AppData" / "Roaming" / APP_NAME
+
+
+def user_config_path() -> Path:
+    return user_config_dir() / DEFAULT_CONFIG_FILENAME
+
+
 def resource_path(relative_path: str | Path) -> Path:
     base_dir = Path(getattr(sys, "_MEIPASS", application_dir()))
     return base_dir / relative_path
@@ -308,16 +323,32 @@ def resource_path(relative_path: str | Path) -> Path:
 def _resolve_app_path(path: str | Path) -> Path:
     config_path = Path(path).expanduser()
     if not config_path.is_absolute():
-        config_path = application_dir() / config_path
+        if _is_default_config_request(config_path) and getattr(sys, "frozen", False):
+            config_path = user_config_path()
+        else:
+            config_path = application_dir() / config_path
     return config_path.resolve()
 
 
 def _bundled_default_config_path(requested_path: str | Path) -> Path | None:
     requested = Path(requested_path)
-    if requested.name != "config.yaml":
+    if not _is_default_config_request(requested):
         return None
 
     candidate = resource_path("config.example.yaml")
     if candidate.exists():
         return candidate
     return None
+
+
+def _write_default_config(config_path: Path, requested_path: str | Path) -> None:
+    default_config_path = _bundled_default_config_path(requested_path)
+    if default_config_path is None:
+        return
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(default_config_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _is_default_config_request(path: Path) -> bool:
+    return path.name == DEFAULT_CONFIG_FILENAME and str(path.parent) in {"", "."}

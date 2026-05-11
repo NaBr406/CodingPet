@@ -9,7 +9,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from chat_thread import ChatWorker
-from config_loader import ConfigError, AppConfig, load_config, save_core_settings
+from config_loader import ConfigError, AppConfig, load_config, save_core_settings, user_config_dir
 from context_dialog import ContextDialog
 from conversation_history import ACTIVE_CHAT_SOURCE, PASSIVE_CHAT_SOURCE, ChatTurn
 from logging_utils import LOGGER_NAME, setup_logging
@@ -326,7 +326,8 @@ class CodingPetController(QObject):
 
 
 def main() -> int:
-    setup_logging()
+    log_path = user_config_dir() / "codingpet.log" if getattr(sys, "frozen", False) else "codingpet.log"
+    setup_logging(log_path)
     logger = logging.getLogger(LOGGER_NAME)
 
     try:
