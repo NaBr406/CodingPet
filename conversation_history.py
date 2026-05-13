@@ -6,6 +6,7 @@ from dataclasses import dataclass
 # source 用来区分“用户主动聊天”和“系统被动观察”，上下文窗口会按它改变展示。
 ACTIVE_CHAT_SOURCE = "active"
 PASSIVE_CHAT_SOURCE = "passive"
+MAX_USER_INPUT_CHARS = 2000
 
 
 @dataclass(frozen=True)

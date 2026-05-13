@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import sys
+import tempfile
 from typing import Any
 
 import yaml
@@ -222,9 +223,7 @@ def save_core_settings(path: str | Path, settings: CoreSettings) -> None:
     observer_raw["global_observation_enabled"] = bool(settings.global_observation_enabled)
     observer_raw["interval_seconds"] = interval_seconds
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    with config_path.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(raw, handle, allow_unicode=True, sort_keys=False)
+    _atomic_write_yaml(config_path, raw)
 
 
 def _read_section(raw: dict[str, Any], section_name: str) -> dict[str, Any]:
@@ -372,8 +371,41 @@ def _write_default_config(config_path: Path, requested_path: str | Path) -> None
     if default_config_path is None:
         return
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(default_config_path.read_text(encoding="utf-8"), encoding="utf-8")
+    _atomic_write_text(config_path, default_config_path.read_text(encoding="utf-8"))
+
+
+def _atomic_write_yaml(path: Path, payload: dict[str, Any]) -> None:
+    _atomic_write_text(
+        path,
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False),
+    )
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    # 配置写入先落到同目录临时文件，再原子替换，避免崩溃时留下半截 YAML。
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _is_default_config_request(path: Path) -> bool:

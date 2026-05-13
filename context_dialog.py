@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from conversation_history import PASSIVE_CHAT_SOURCE, ChatTurn
+from conversation_history import MAX_USER_INPUT_CHARS, PASSIVE_CHAT_SOURCE, ChatTurn
 
 
 class ContextDialog(QDialog):
@@ -76,6 +76,7 @@ class ContextDialog(QDialog):
 
         self._input = QLineEdit()
         self._input.setObjectName("ContextInput")
+        self._input.setMaxLength(MAX_USER_INPUT_CHARS)
         self._input.setPlaceholderText("继续说点什么...")
         self._input.returnPressed.connect(self._submit)
 
@@ -143,6 +144,9 @@ class ContextDialog(QDialog):
     def _submit(self) -> None:
         text = self._input.text().strip()
         if not text:
+            return
+        if len(text) > MAX_USER_INPUT_CHARS:
+            self.set_status(f"输入太长了，最多 {MAX_USER_INPUT_CHARS} 个字。")
             return
         self._input.clear()
         self.set_sending(True)

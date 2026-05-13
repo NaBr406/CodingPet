@@ -11,7 +11,8 @@ from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
 from chat_thread import ChatWorker
 from config_loader import ConfigError, AppConfig, load_config, save_core_settings, user_config_dir
 from context_dialog import ContextDialog
-from conversation_history import ACTIVE_CHAT_SOURCE, PASSIVE_CHAT_SOURCE, ChatTurn
+from conversation_history import ACTIVE_CHAT_SOURCE, MAX_USER_INPUT_CHARS, PASSIVE_CHAT_SOURCE, ChatTurn
+from llm_client import close_cached_clients
 from logging_utils import LOGGER_NAME, setup_logging
 from observer_thread import ObserverWorker
 from pet_state import RANDOM_MOOD_STATES, PetState
@@ -31,6 +32,8 @@ class CodingPetController(QObject):
         self._chat_history: list[ChatTurn] = []
         self._interaction_busy = False
         self._manual_override_active = False
+        self._observer_restart_after_stop = False
+        self._observer_stopping = False
 
         self.window = PetWindow(config)
         self.window.chat_submitted.connect(self._start_chat)
@@ -68,7 +71,10 @@ class CodingPetController(QObject):
 
     def shutdown(self) -> None:
         # 退出时按顺序停掉后台线程和悬浮窗口，避免进程结束前还在请求模型。
-        self._stop_observer_worker()
+        self._stop_observer_worker(
+            wait_ms=self._observer_shutdown_wait_ms(),
+            force_terminate=True,
+        )
 
         if self._chat_worker is not None and self._chat_worker.isRunning():
             self._chat_worker.wait(1500)
@@ -77,11 +83,19 @@ class CodingPetController(QObject):
             self._context_dialog.close()
 
         self._random_mood_timer.stop()
+        self._state_reset_timer.stop()
+        close_cached_clients()
 
     def _start_chat(self, text: str) -> bool:
         # 同一时间只允许一条主动请求，避免聊天结果和界面状态交叉覆盖。
         user_text = text.strip()
         if not user_text:
+            return False
+        if len(user_text) > MAX_USER_INPUT_CHARS:
+            self.window.show_message(f"一次最多输入 {MAX_USER_INPUT_CHARS} 个字。")
+            if self._context_dialog is not None:
+                self._context_dialog.set_sending(False)
+                self._context_dialog.set_status(f"输入太长了，最多 {MAX_USER_INPUT_CHARS} 个字。")
             return False
 
         if self._chat_worker is not None and self._chat_worker.isRunning():
@@ -96,6 +110,7 @@ class CodingPetController(QObject):
         self._interaction_busy = True
         self._manual_override_active = False
         self._random_mood_timer.stop()
+        self._refresh_observer_observation_gate()
 
         if self._context_dialog is not None:
             self._context_dialog.set_sending(True)
@@ -112,6 +127,7 @@ class CodingPetController(QObject):
         if self._chat_worker is not None:
             self._chat_worker.deleteLater()
             self._chat_worker = None
+        self._refresh_observer_observation_gate()
 
     def _open_settings(self) -> None:
         # 设置保存后立刻重载，让新请求走新的配置。
@@ -140,9 +156,9 @@ class CodingPetController(QObject):
 
     def _sync_observer_worker(self, force_restart: bool = False) -> None:
         # 观察线程是否启用完全由配置控制。
-        if force_restart:
-            if not self._stop_observer_worker(restart_after_stop=True):
-                return
+        if force_restart and self._observer_worker is not None:
+            self._stop_observer_worker(restart_after_stop=True)
+            return
 
         if self._config.observer.global_observation_enabled:
             self._start_observer_worker()
@@ -156,41 +172,112 @@ class CodingPetController(QObject):
             return
 
         worker = ObserverWorker(self._config)
-        worker.observation_started.connect(self._handle_observation_started)
-        worker.observation_failed.connect(self._handle_observation_finished_without_reply)
-        worker.observation_ready.connect(self._handle_observation_reply)
-        worker.start()
+        self._connect_observer_worker_signals(worker)
         self._observer_worker = worker
+        self._observer_stopping = False
+        self._observer_restart_after_stop = False
+        self._refresh_observer_observation_gate()
+        worker.start()
         self._logger.info("阶段 3 成功：全局观测线程已启动。")
 
-    def _stop_observer_worker(self, restart_after_stop: bool = False) -> bool:
+    def _stop_observer_worker(
+        self,
+        restart_after_stop: bool = False,
+        wait_ms: int = 1500,
+        force_terminate: bool = False,
+    ) -> bool:
         # 优雅停线程：先请求 stop，再等一小会儿。
         if self._observer_worker is None:
+            self._observer_restart_after_stop = False
             return True
 
         worker = self._observer_worker
+        self._observer_restart_after_stop = restart_after_stop
+        self._observer_stopping = True
+        self._disconnect_observer_observation_signals(worker)
+        worker.set_observation_allowed(False)
         worker.stop()
-        if not worker.wait(1500):
-            self._logger.warning("观察线程仍在收尾，等待当前请求结束后再释放。")
-            worker.finished.connect(
-                lambda: self._handle_observer_worker_finished(worker, restart_after_stop)
-            )
+        if worker.wait(max(0, wait_ms)):
+            self._finalize_observer_worker(worker)
+            return True
+
+        if force_terminate:
+            self._logger.warning("观察线程退出超时，将在应用退出路径强制结束。")
+            worker.terminate()
+            if worker.wait(1000):
+                self._finalize_observer_worker(worker)
+                return True
+            self._logger.critical("观察线程强制结束后仍未退出，进程可能需要由系统回收。")
             return False
 
-        self._observer_worker = None
-        worker.deleteLater()
-        return True
+        self._logger.warning("观察线程仍在收尾，等待当前请求结束后再释放。")
+        return False
 
-    def _handle_observer_worker_finished(
-        self,
-        worker: ObserverWorker,
-        restart_after_stop: bool,
-    ) -> None:
-        if self._observer_worker is worker:
+    def _handle_observer_worker_finished(self, worker: ObserverWorker) -> None:
+        if worker is not self._observer_worker:
+            self._disconnect_all_observer_signals(worker)
+            worker.deleteLater()
+            return
+
+        self._finalize_observer_worker(worker)
+
+    def _finalize_observer_worker(self, worker: ObserverWorker) -> None:
+        restart_after_stop = self._observer_restart_after_stop
+        if worker is self._observer_worker:
             self._observer_worker = None
+            self._observer_restart_after_stop = False
+            self._observer_stopping = False
+        self._disconnect_all_observer_signals(worker)
         worker.deleteLater()
         if restart_after_stop and self._config.observer.global_observation_enabled:
             self._start_observer_worker()
+
+    def _connect_observer_worker_signals(self, worker: ObserverWorker) -> None:
+        worker.observation_started.connect(self._handle_observation_started)
+        worker.observation_failed.connect(self._handle_observation_finished_without_reply)
+        worker.observation_ready.connect(self._handle_observation_reply)
+        worker.finished.connect(lambda: self._handle_observer_worker_finished(worker))
+
+    def _disconnect_observer_observation_signals(self, worker: ObserverWorker) -> None:
+        for signal in (
+            worker.observation_started,
+            worker.observation_failed,
+            worker.observation_ready,
+        ):
+            try:
+                signal.disconnect()
+            except TypeError:
+                pass
+
+    def _disconnect_all_observer_signals(self, worker: ObserverWorker) -> None:
+        self._disconnect_observer_observation_signals(worker)
+        try:
+            worker.finished.disconnect()
+        except TypeError:
+            pass
+
+    def _observer_shutdown_wait_ms(self) -> int:
+        return int((self._config.runtime.request_timeout_seconds + 2.0) * 1000)
+
+    def _is_active_observer_worker(self, worker: ObserverWorker) -> bool:
+        return (
+            worker is self._observer_worker
+            and not self._observer_stopping
+            and not worker.is_stop_requested()
+        )
+
+    def _observer_can_run_cycle(self) -> bool:
+        if self._observer_worker is None or self._observer_stopping:
+            return False
+        if not self._config.observer.global_observation_enabled:
+            return False
+        if self._interaction_busy or self._manual_override_active:
+            return False
+        return not (self._chat_worker is not None and self._chat_worker.isRunning())
+
+    def _refresh_observer_observation_gate(self) -> None:
+        if self._observer_worker is not None:
+            self._observer_worker.set_observation_allowed(self._observer_can_run_cycle())
 
     def _handle_chat_reply(self, user_text: str, message: str, emotion: str) -> None:
         # 主动聊天完成后，把记录写进历史，再驱动宠物状态和上下文面板。
@@ -200,32 +287,57 @@ class CodingPetController(QObject):
         self._handle_model_reply(message, emotion)
         self._refresh_context_dialog()
 
-    def _handle_observation_reply(self, window_title: str, message: str, emotion: str) -> None:
+    def _handle_observation_reply(
+        self,
+        worker: ObserverWorker,
+        window_title: str,
+        message: str,
+        emotion: str,
+    ) -> None:
         # 被动观察会把窗口标题一起记进历史，方便上下文面板区分来源。
+        if not self._is_active_observer_worker(worker):
+            return
+        if not self._observer_can_run_cycle():
+            self._logger.info("观察回复到达时当前正忙，已忽略本轮结果。")
+            self._refresh_observer_observation_gate()
+            return
         self._record_chat_turn(f"被动观察：{window_title}", message, PASSIVE_CHAT_SOURCE)
-        self._handle_model_reply(message, emotion)
+        self._handle_model_reply(message, emotion, clear_manual_override=False)
         self._refresh_context_dialog()
 
-    def _handle_model_reply(self, message: str, emotion: str) -> None:
+    def _handle_model_reply(
+        self,
+        message: str,
+        emotion: str,
+        clear_manual_override: bool = True,
+    ) -> None:
         # 模型输出里带的情绪值会映射到宠物状态图。
+        if self._manual_override_active and not clear_manual_override:
+            return
         state = PetState.from_emotion(emotion)
         self._interaction_busy = True
-        self._manual_override_active = False
+        if clear_manual_override:
+            self._manual_override_active = False
         self._random_mood_timer.stop()
+        self._refresh_observer_observation_gate()
         self.window.set_state(state)
         self.window.show_message(message)
         self._state_reset_timer.start(self._config.runtime.state_reset_ms)
 
-    def _handle_observation_started(self) -> None:
+    def _handle_observation_started(self, worker: ObserverWorker) -> None:
         # 只有在当前不忙、也没有手动拖拽/缩放时，才切到观察态。
-        if self._interaction_busy or self._manual_override_active:
+        if not self._is_active_observer_worker(worker) or not self._observer_can_run_cycle():
+            self._refresh_observer_observation_gate()
             return
         self._random_mood_timer.stop()
         self.window.set_state(PetState.REVIEWING)
 
-    def _handle_observation_finished_without_reply(self) -> None:
+    def _handle_observation_finished_without_reply(self, worker: ObserverWorker) -> None:
         # 本轮观察没生成有效回复时，回到空闲态并重新安排随机心情。
+        if not self._is_active_observer_worker(worker):
+            return
         if self._interaction_busy or self._manual_override_active:
+            self._refresh_observer_observation_gate()
             return
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
@@ -244,6 +356,7 @@ class CodingPetController(QObject):
         # 一次回复展示完以后，交互态不应该一直占着。
         self._interaction_busy = False
         self._manual_override_active = False
+        self._refresh_observer_observation_gate()
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
@@ -273,6 +386,7 @@ class CodingPetController(QObject):
             return
         self._manual_override_active = True
         self._random_mood_timer.stop()
+        self._refresh_observer_observation_gate()
         self.window.set_state(PetState.LISTENING)
 
     def _handle_chat_cancelled(self) -> None:
@@ -325,6 +439,7 @@ class CodingPetController(QObject):
             return
         self._manual_override_active = True
         self._random_mood_timer.stop()
+        self._refresh_observer_observation_gate()
         self.window.set_state(PetState.DRAGGING)
 
     def _handle_drag_finished(self) -> None:
@@ -336,6 +451,7 @@ class CodingPetController(QObject):
             return
         self._manual_override_active = True
         self._random_mood_timer.stop()
+        self._refresh_observer_observation_gate()
         self.window.set_state(PetState.RESIZING)
 
     def _handle_resize_finished(self) -> None:
@@ -346,6 +462,7 @@ class CodingPetController(QObject):
         if self._interaction_busy:
             return
         self._manual_override_active = False
+        self._refresh_observer_observation_gate()
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()

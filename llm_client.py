@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Sequence
 
 from openai import BadRequestError, NotFoundError, OpenAI
@@ -25,6 +26,8 @@ class ModelReply:
 # 提示词要求模型输出 [STATE] 前缀，这里预先拼出合法状态集合并准备解析正则。
 STATE_NAMES = "|".join(state.name for state in PetState)
 STATE_PREFIX_PATTERN = re.compile(r"^\s*\[([A-Z_]+)\]\s*(.*)$", flags=re.IGNORECASE | re.DOTALL)
+_CLIENT_CACHE_LOCK = Lock()
+_CLIENT_CACHE: dict[tuple[str, str, float], OpenAI] = {}
 
 
 def generate_chat_reply(
@@ -114,16 +117,37 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
 
 def _build_client(base_url: str, api_key: str, timeout_seconds: float) -> OpenAI:
     # 这里显式禁止空 base_url / api_key，让错误尽早暴露在本地。
-    if not base_url.strip():
+    normalized_base_url = base_url.strip()
+    normalized_api_key = api_key.strip()
+    normalized_timeout = float(timeout_seconds)
+    if not normalized_base_url:
         raise ValueError("缺少 base_url")
-    if not api_key.strip():
+    if not normalized_api_key:
         raise ValueError("缺少 api_key")
-    return OpenAI(
-        base_url=base_url,
-        api_key=api_key,
-        timeout=timeout_seconds,
-        max_retries=0,
-    )
+    cache_key = (normalized_base_url, normalized_api_key, normalized_timeout)
+    with _CLIENT_CACHE_LOCK:
+        client = _CLIENT_CACHE.get(cache_key)
+        if client is None:
+            client = OpenAI(
+                base_url=normalized_base_url,
+                api_key=normalized_api_key,
+                timeout=normalized_timeout,
+                max_retries=0,
+            )
+            _CLIENT_CACHE[cache_key] = client
+        return client
+
+
+def close_cached_clients() -> None:
+    # 退出应用时关闭底层 HTTP 连接池，避免 OpenAI SDK 的连接资源拖住进程。
+    with _CLIENT_CACHE_LOCK:
+        clients = list(_CLIENT_CACHE.values())
+        _CLIENT_CACHE.clear()
+
+    for client in clients:
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
 
 
 def _chat_model_for_request(config: AppConfig, screenshot_base64: str | None) -> str:

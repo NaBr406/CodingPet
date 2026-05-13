@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
 # 项目统一使用这个 logger 名称，方便各模块共享同一套日志配置。
 LOGGER_NAME = "codingpet"
+LOG_MAX_BYTES = 1_048_576
+LOG_BACKUP_COUNT = 5
 
 # 这里负责把运行日志同时写到文件和控制台，方便本地调试和打包后追踪。
 
@@ -29,7 +32,12 @@ def setup_logging(log_path: str | Path = "codingpet.log") -> logging.Logger:
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
-    file_handler = logging.FileHandler(target, encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        target,
+        maxBytes=LOG_MAX_BYTES,
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

@@ -4,13 +4,16 @@ import logging
 import sys
 from pathlib import Path
 
+
 from PyQt6.QtCore import QEvent, QPoint, QRect, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QMouseEvent, QPainter, QPainterPath, QPixmap, QWheelEvent
 from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QMenu, QVBoxLayout, QWidget
 
 from config_loader import AppConfig, load_config
+from conversation_history import MAX_USER_INPUT_CHARS
 from logging_utils import LOGGER_NAME, setup_logging
 from pet_state import PetState
+
 
 
 WINDOW_FLAGS = (
@@ -207,6 +210,7 @@ class ChatInputWidget(QWidget):
         self._anchor_rect = QRect()
 
         self._line_edit = QLineEdit(self)
+        self._line_edit.setMaxLength(MAX_USER_INPUT_CHARS)
         self._line_edit.setPlaceholderText("说点什么吧...")
         self._line_edit.returnPressed.connect(self._emit_submission)
         self._line_edit.installEventFilter(self)
@@ -528,7 +532,7 @@ class PetWindow(QWidget):
             self.settings_requested.emit()
         elif selected_action == exit_action:
             logging.info("退出")
-            sys.exit(0)
+            exit()
 
     def _start_drag(self, event: QMouseEvent) -> None:
         # 先检查鼠标是否在边缘，边缘就是缩放，不是拖动。
