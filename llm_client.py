@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import ast
 import json
 import logging
 import re
@@ -26,6 +27,54 @@ class ModelReply:
 # 提示词要求模型输出 [STATE] 前缀，这里预先拼出合法状态集合并准备解析正则。
 STATE_NAMES = "|".join(state.name for state in PetState)
 STATE_PREFIX_PATTERN = re.compile(r"^\s*\[([A-Z_]+)\]\s*(.*)$", flags=re.IGNORECASE | re.DOTALL)
+STATE_WRAPPED_PREFIX_PATTERN = re.compile(
+    r"^\s*[\[【(（]\s*([A-Z0-9_\-\s\u4e00-\u9fff]+)\s*[\]】)）]\s*[:：\-–—]?\s*(.*)$",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+STATE_LABEL_PREFIX_PATTERN = re.compile(
+    r"^\s*(?:state|emotion|mood|status|pet_state|状态|情绪|心情)\s*[:：=]\s*([^\n\r,，。;；]+)\s*(.*)$",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+STATE_INLINE_PREFIX_PATTERN = re.compile(
+    r"^\s*([A-Z][A-Z0-9_\-\s]{1,32}|[\u4e00-\u9fff]{1,8})\s*[:：\-–—]\s*(.+)$",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+FIELD_LINE_PATTERN = re.compile(
+    r"^\s*([A-Z_][A-Z0-9_\-\s]*|[\u4e00-\u9fff]{1,8})\s*[:：=]\s*(.*)$",
+    flags=re.IGNORECASE,
+)
+STATE_FIELD_KEYS = {
+    "state",
+    "emotion",
+    "mood",
+    "status",
+    "sentiment",
+    "pet_state",
+    "expression",
+    "状态",
+    "情绪",
+    "心情",
+    "表情",
+}
+MESSAGE_FIELD_KEYS = {
+    "message",
+    "reply",
+    "text",
+    "content",
+    "response",
+    "comment",
+    "answer",
+    "output",
+    "say",
+    "消息",
+    "回复",
+    "内容",
+    "文本",
+    "评论",
+    "建议",
+}
+JSONISH_START_CHARS = ("{", "[")
+PARSE_LOG_TEXT_LIMIT = 500
 _CLIENT_CACHE_LOCK = Lock()
 _CLIENT_CACHE: dict[tuple[str, str, float], OpenAI] = {}
 
@@ -310,39 +359,315 @@ def _coerce_message_content(content: Any) -> str:
 
 
 def parse_model_reply(raw_text: str, fallback_message: str) -> ModelReply:
-    # 主格式是 [STATE] message；如果模型没守格式，再尽量兼容 JSON 或纯文本。
+    # 主格式是 [STATE] message；如果模型没守格式，再尽量兼容 JSON、键值行或纯文本。
     cleaned = _strip_code_fences(raw_text)
     if not cleaned:
         return ModelReply(message=fallback_message, emotion=PetState.IDLE)
 
-    match = STATE_PREFIX_PATTERN.match(cleaned)
-    if match:
-        # 严格匹配到合法状态时用对应情绪，否则只取消息并回退到 IDLE。
-        state_token = match.group(1).strip().upper()
-        emotion = PetState.__members__.get(state_token)
-        message = match.group(2).strip() or cleaned
-        if emotion is not None:
-            return ModelReply(message=message, emotion=emotion)
-        return ModelReply(message=message, emotion=PetState.IDLE)
+    for parser in (
+        _parse_state_prefixed_reply,
+        _parse_json_reply,
+        _parse_field_lines_reply,
+        _parse_inline_state_reply,
+    ):
+        parsed = parser(cleaned)
+        if parsed is not None:
+            return parsed
 
-    if cleaned.startswith("{") and cleaned.endswith("}"):
-        # 兼容模型偶尔输出 JSON 的情况，减少一次格式漂移造成的坏体验。
-        try:
-            payload = json.loads(cleaned)
-        except json.JSONDecodeError:
-            pass
-        else:
-            if isinstance(payload, dict):
-                message = str(
-                    payload.get("message")
-                    or payload.get("reply")
-                    or payload.get("text")
-                    or cleaned
-                ).strip()
-                emotion = PetState.from_emotion(str(payload.get("emotion") or payload.get("sentiment")))
-                return ModelReply(message=message or cleaned, emotion=emotion)
-
+    _log_unparsed_model_reply(cleaned)
     return ModelReply(message=cleaned, emotion=PetState.IDLE)
+
+
+def _parse_state_prefixed_reply(text: str) -> ModelReply | None:
+    parsed = _parse_state_prefix_candidate(text)
+    if parsed is not None:
+        return parsed
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        parsed = _parse_state_prefix_candidate(line)
+        if parsed is None:
+            continue
+        if parsed.message == line and index + 1 < len(lines):
+            return ModelReply(
+                message="\n".join(lines[index + 1:]).strip(),
+                emotion=parsed.emotion,
+            )
+        return parsed
+    return None
+
+
+def _parse_state_prefix_candidate(candidate: str) -> ModelReply | None:
+    for pattern in (STATE_PREFIX_PATTERN, STATE_WRAPPED_PREFIX_PATTERN):
+        match = pattern.match(candidate)
+        if not match:
+            continue
+
+        state_token = _normalize_state_token(match.group(1))
+        emotion = PetState.resolve_emotion(state_token)
+
+        message = _clean_message_text(match.group(2)) or candidate.strip()
+        if emotion is None and state_token != "STATE":
+            _log_unknown_state_token(state_token, message)
+        return ModelReply(message=message, emotion=emotion or PetState.IDLE)
+    return None
+
+
+def _parse_json_reply(text: str) -> ModelReply | None:
+    for candidate in _json_candidates(text):
+        payload = _loads_jsonish(candidate)
+        parsed = _reply_from_payload(payload)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _json_candidates(text: str) -> list[str]:
+    stripped = text.strip()
+    candidates: list[str] = []
+    if stripped.startswith(JSONISH_START_CHARS):
+        candidates.append(stripped)
+
+    # 模型常见漂移是“说明文字 + JSON”，这里只抽第一个平衡的对象或数组。
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = stripped.find(opener)
+        if start < 0:
+            continue
+        depth = 0
+        in_string = False
+        escape = False
+        quote = ""
+        for index, char in enumerate(stripped[start:], start=start):
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == quote:
+                    in_string = False
+                continue
+            if char in {"'", '"'}:
+                in_string = True
+                quote = char
+                continue
+            if char == opener:
+                depth += 1
+            elif char == closer:
+                depth -= 1
+                if depth == 0:
+                    candidate = stripped[start : index + 1]
+                    if candidate not in candidates:
+                        candidates.append(candidate)
+                    break
+    return candidates
+
+
+def _loads_jsonish(candidate: str) -> Any:
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    try:
+        return ast.literal_eval(candidate)
+    except (SyntaxError, ValueError):
+        return None
+
+
+def _reply_from_payload(payload: Any) -> ModelReply | None:
+    if isinstance(payload, list):
+        for item in payload:
+            parsed = _reply_from_payload(item)
+            if parsed is not None:
+                return parsed
+        return None
+
+    if isinstance(payload, str):
+        return _parse_state_prefixed_reply(payload) or _parse_inline_state_reply(payload)
+
+    if not isinstance(payload, dict):
+        return None
+
+    state_value, message_value = _extract_payload_fields(payload)
+    if message_value is not None:
+        message_text = _clean_message_value(message_value)
+        parsed_message = _parse_state_prefixed_reply(message_text) or _parse_inline_state_reply(message_text)
+        if state_value is None and parsed_message is not None:
+            return parsed_message
+    else:
+        message_text = ""
+
+    emotion = PetState.resolve_emotion(_normalize_state_token(state_value))
+    if emotion is None and state_value is None:
+        for value in payload.values():
+            parsed = _reply_from_payload(value)
+            if parsed is not None:
+                return parsed
+        return None
+
+    message = message_text or _compact_json(payload)
+    return ModelReply(message=message, emotion=emotion or PetState.IDLE)
+
+
+def _extract_payload_fields(payload: dict[Any, Any]) -> tuple[Any | None, Any | None]:
+    state_value: Any | None = None
+    message_value: Any | None = None
+    nested_candidates: list[Any] = []
+
+    for key, value in payload.items():
+        normalized_key = _normalize_field_key(key)
+        if normalized_key in STATE_FIELD_KEYS and state_value is None:
+            state_value = value
+            continue
+        if normalized_key in MESSAGE_FIELD_KEYS and message_value is None:
+            message_value = value
+            continue
+        if isinstance(value, (dict, list, str)):
+            nested_candidates.append(value)
+
+    if state_value is None or message_value is None:
+        for candidate in nested_candidates:
+            nested = _reply_from_payload(candidate)
+            if nested is None:
+                continue
+            if state_value is None:
+                state_value = nested.emotion.name
+            if message_value is None:
+                message_value = nested.message
+            break
+
+    return state_value, message_value
+
+
+def _parse_field_lines_reply(text: str) -> ModelReply | None:
+    state_value: str | None = None
+    message_parts: list[str] = []
+    collecting_message = False
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        match = FIELD_LINE_PATTERN.match(stripped)
+        if match:
+            key = _normalize_field_key(match.group(1))
+            value = match.group(2).strip()
+            if key in STATE_FIELD_KEYS:
+                state_value = value
+                collecting_message = False
+                continue
+            if key in MESSAGE_FIELD_KEYS:
+                if value:
+                    message_parts.append(value)
+                collecting_message = True
+                continue
+
+            emotion = PetState.resolve_emotion(_normalize_state_token(match.group(1)))
+            if emotion is not None and value:
+                return ModelReply(message=_clean_message_text(value), emotion=emotion)
+
+        if collecting_message:
+            message_parts.append(stripped)
+
+    if state_value is None and not message_parts:
+        return None
+
+    emotion = PetState.resolve_emotion(_normalize_state_token(state_value))
+    if emotion is None and state_value is not None:
+        return None
+    message = _clean_message_text("\n".join(message_parts)) or text.strip()
+    return ModelReply(message=message, emotion=emotion or PetState.IDLE)
+
+
+def _parse_inline_state_reply(text: str) -> ModelReply | None:
+    for pattern in (STATE_LABEL_PREFIX_PATTERN, STATE_INLINE_PREFIX_PATTERN):
+        match = pattern.match(text)
+        if not match:
+            continue
+
+        state_token = _normalize_state_token(match.group(1))
+        emotion = PetState.resolve_emotion(state_token)
+        if emotion is None:
+            continue
+
+        message = _clean_message_text(match.group(2)) or text.strip()
+        message = _strip_leading_message_label(message)
+        return ModelReply(message=message or text.strip(), emotion=emotion)
+    return None
+
+
+def _normalize_state_token(value: Any) -> str:
+    token = str(value or "").strip()
+    token = token.removeprefix("PetState.").strip()
+    token = token.strip("[]【】()（）{}\"'` \t\r\n:：,，.。;；")
+    token = re.sub(r"[\s\-–—]+", "_", token)
+    return token.upper() if token.isascii() else token.replace("_", "")
+
+
+def _normalize_field_key(value: Any) -> str:
+    key = str(value or "").strip().strip("\"'`[]【】()（）")
+    key = re.sub(r"[\s\-]+", "_", key)
+    return key.lower()
+
+
+def _clean_message_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return _clean_message_text(value)
+    if isinstance(value, list):
+        parts = [_clean_message_value(item) for item in value]
+        return "\n".join(part for part in parts if part).strip()
+    if isinstance(value, dict):
+        nested = _reply_from_payload(value)
+        if nested is not None:
+            return nested.message
+        return _compact_json(value)
+    return _clean_message_text(str(value))
+
+
+def _clean_message_text(text: str) -> str:
+    cleaned = _strip_code_fences(str(text))
+    cleaned = _strip_leading_message_label(cleaned)
+    return cleaned.strip().strip("\"'`")
+
+
+def _strip_leading_message_label(text: str) -> str:
+    return re.sub(
+        r"^\s*(?:message|reply|text|content|response|comment|answer|消息|回复|内容|文本|评论|建议)\s*[:：=]\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+
+
+def _compact_json(payload: Any) -> str:
+    try:
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    except TypeError:
+        return str(payload)
+
+
+def _log_unparsed_model_reply(text: str) -> None:
+    preview = re.sub(r"\s+", " ", text).strip()
+    if len(preview) > PARSE_LOG_TEXT_LIMIT:
+        preview = f"{preview[:PARSE_LOG_TEXT_LIMIT]}..."
+    logging.getLogger(LOGGER_NAME).warning(
+        "LLM 回复未匹配状态协议，已按纯文本和 IDLE 处理。原始回复片段：%s",
+        preview,
+    )
+
+
+def _log_unknown_state_token(state_token: str, message: str) -> None:
+    preview = re.sub(r"\s+", " ", message).strip()
+    if len(preview) > PARSE_LOG_TEXT_LIMIT:
+        preview = f"{preview[:PARSE_LOG_TEXT_LIMIT]}..."
+    logging.getLogger(LOGGER_NAME).warning(
+        "LLM 回复状态无法识别，已保留正文并回退到 IDLE。状态=%s，正文片段：%s",
+        state_token,
+        preview,
+    )
 
 
 def _strip_code_fences(text: str) -> str:
