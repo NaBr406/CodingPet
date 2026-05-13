@@ -25,6 +25,16 @@ observer:
   global_observation_enabled: true
   # 全局观测间隔，单位为秒；实际加载时最低会被限制为 5 秒。
   interval_seconds: 300
+  # 命中这些前台进程时，被动观察不会发送截图或窗口标题，只发送进程名给模型做脱敏评论。
+  privacy_process_names:
+    - "WeChat.exe"
+    - "WeChatAppEx.exe"
+    - "Weixin.exe"
+    - "WeCom.exe"
+    - "WXWork.exe"
+    - "QQ.exe"
+    - "NTQQ.exe"
+    - "TIM.exe"
 
 runtime:
   # 单次模型请求超时时间，单位为秒。

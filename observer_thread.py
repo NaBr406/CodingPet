@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import base64
+import ctypes
 import io
 import logging
+from ctypes import wintypes
+from pathlib import PureWindowsPath
 from threading import Event
 
 import pygetwindow as gw
@@ -11,12 +14,16 @@ from PIL import Image
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from config_loader import AppConfig
-from llm_client import analyze_screenshot
+from llm_client import analyze_redacted_observation, analyze_screenshot
 from logging_utils import LOGGER_NAME
 
 
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_NAME_BUFFER_SIZE = 32768
+
+
 class ObserverWorker(QThread):
-    # 后台观察线程：定时截取前台窗口并请求视觉模型生成主动评论。
+    # 后台观察线程：定时观察前台窗口，隐私进程会降级成只发送进程名。
     observation_started = pyqtSignal(object)
     observation_failed = pyqtSignal(object)
     observation_ready = pyqtSignal(object, str, str, str)
@@ -65,6 +72,26 @@ class ObserverWorker(QThread):
 
     def _observe_once(self, screen_capture: mss) -> None:
         logger = logging.getLogger(LOGGER_NAME)
+        process_name = _get_foreground_process_name()
+
+        if _is_privacy_process(process_name, self._config.observer.privacy_process_names):
+            if self._stop_requested.is_set() or not self._observation_allowed.is_set():
+                return
+
+            # 隐私窗口不传标题、不截图，只把进程名交给模型做脱敏观察。
+            self.observation_started.emit(self)
+            if self._stop_requested.is_set() or not self._observation_allowed.is_set():
+                return
+
+            logger.info("观察线程命中隐私进程，仅发送进程名：%s", process_name)
+            reply = analyze_redacted_observation(self._config, process_name)
+            if self._stop_requested.is_set() or not self._observation_allowed.is_set():
+                return
+
+            logger.info("观察线程已为隐私进程生成脱敏主动评论：%s", process_name)
+            self.observation_ready.emit(self, process_name, reply.message, reply.emotion.value)
+            return
+
         active_window = gw.getActiveWindow()
         title = ""
         if active_window is not None:
@@ -132,3 +159,89 @@ class ObserverWorker(QThread):
             chunk = min(500, remaining)
             self.msleep(chunk)
             remaining -= chunk
+
+
+def _get_foreground_process_name() -> str:
+    windll = getattr(ctypes, "windll", None)
+    if windll is None:
+        return ""
+
+    try:
+        user32 = windll.user32
+        kernel32 = windll.kernel32
+        user32.GetForegroundWindow.restype = wintypes.HWND
+        user32.GetWindowThreadProcessId.argtypes = (
+            wintypes.HWND,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        kernel32.OpenProcess.argtypes = (
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        )
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.QueryFullProcessImageNameW.argtypes = (
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+
+        process_id = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+        if not process_id.value:
+            return ""
+
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION,
+            False,
+            process_id.value,
+        )
+        if not handle:
+            return ""
+
+        try:
+            size = wintypes.DWORD(PROCESS_NAME_BUFFER_SIZE)
+            buffer = ctypes.create_unicode_buffer(size.value)
+            ok = kernel32.QueryFullProcessImageNameW(
+                handle,
+                0,
+                buffer,
+                ctypes.byref(size),
+            )
+            if not ok:
+                return ""
+            return PureWindowsPath(buffer.value).name
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        logging.getLogger(LOGGER_NAME).debug("读取前台进程名失败。", exc_info=True)
+        return ""
+
+
+def _is_privacy_process(process_name: str, configured_names: tuple[str, ...]) -> bool:
+    process_tokens = _process_name_tokens(process_name)
+    if not process_tokens:
+        return False
+
+    for configured_name in configured_names:
+        if process_tokens & _process_name_tokens(configured_name):
+            return True
+    return False
+
+
+def _process_name_tokens(process_name: str) -> set[str]:
+    normalized = process_name.strip().lower()
+    if not normalized:
+        return set()
+
+    stem = normalized[:-4] if normalized.endswith(".exe") else normalized
+    return {normalized, stem}

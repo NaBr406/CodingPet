@@ -10,7 +10,7 @@ CodingPet 是一个悬浮在桌面上的编程伙伴。它使用 PyQt6 渲染透
 - 15 种状态动画：`idle`、`greeting`、`listening`、`reviewing`、`dragging`、`resizing`、`thinking`、`angry`、`happy`、`coding`、`sleepy`、`confused`、`surprised`、`proud`、`bored`。
 - 每个状态优先加载 `assets/<state>/frame_*.png` 动画帧，当前素材为每个状态 32 帧；缺失时会回退到对应静态图。
 - 双击宠物打开输入框，发送消息时会尽量附带当前屏幕截图，让模型结合代码、报错或前台窗口状态回答。
-- 可配置的后台观察线程会按间隔截取当前前台窗口，并调用视觉模型主动评论。
+- 可配置的后台观察线程会按间隔观察当前前台窗口；命中隐私进程时不会发送截图或窗口标题，只把进程名交给文本模型做脱敏评论。
 - 支持随机心情切换，聊天、观察、拖动和缩放时会自动暂停随机切换。
 - 支持像普通窗口一样从边缘或角落拖动缩放，也支持鼠标滚轮调整大小。
 
@@ -56,6 +56,15 @@ pet_preset:
 observer:
   global_observation_enabled: true
   interval_seconds: 300
+  privacy_process_names:
+    - "WeChat.exe"
+    - "WeChatAppEx.exe"
+    - "Weixin.exe"
+    - "WeCom.exe"
+    - "WXWork.exe"
+    - "QQ.exe"
+    - "NTQQ.exe"
+    - "TIM.exe"
 
 runtime:
   request_timeout_seconds: 20
@@ -109,8 +118,9 @@ runtime:
 
 `observer`：
 
-- `global_observation_enabled`：是否开启后台观察；开启后会按间隔观察当前前台窗口，不按窗口标题过滤。读取配置时仍兼容旧的 `enabled`。
+- `global_observation_enabled`：是否开启后台观察；开启后会按间隔观察当前前台窗口。读取配置时仍兼容旧的 `enabled`。
 - `interval_seconds`：观察间隔，代码中最小值为 5 秒。
+- `privacy_process_names`：隐私进程名单，按进程名大小写不敏感匹配；命中时被动观察不会截图，也不会把窗口标题发给模型，只发送进程名。
 - `ide_keywords`：旧配置兼容字段，当前全局观察不会用它跳过窗口。
 
 `runtime`：

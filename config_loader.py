@@ -13,6 +13,16 @@ import yaml
 APP_NAME = "CodingPet"
 DEFAULT_CONFIG_FILENAME = "config.yaml"
 DEFAULT_PERSONALITY_PROMPT = "一个嘴毒但靠谱的资深工程师，能快速指出坏代码的问题，并给出有用建议"
+DEFAULT_PRIVACY_PROCESS_NAMES = (
+    "WeChat.exe",
+    "WeChatAppEx.exe",
+    "Weixin.exe",
+    "WeCom.exe",
+    "WXWork.exe",
+    "QQ.exe",
+    "NTQQ.exe",
+    "TIM.exe",
+)
 
 
 class ConfigError(Exception):
@@ -44,10 +54,11 @@ class ChatConfig:
 
 @dataclass(frozen=True)
 class ObserverConfig:
-    # 后台观察配置。ide_keywords 保留给兼容旧配置和未来过滤策略使用。
+    # 后台观察配置。privacy_process_names 命中时只把进程名交给模型，不发送截图或窗口标题。
     global_observation_enabled: bool
     interval_seconds: int
     ide_keywords: tuple[str, ...]
+    privacy_process_names: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -147,7 +158,12 @@ def load_config(path: str | Path = DEFAULT_CONFIG_FILENAME) -> AppConfig:
             "IDEA",
             "PyCharm",
             "Visual Studio",
-        ])),
+        ], field_name="observer.ide_keywords")),
+        privacy_process_names=tuple(_string_list(
+            observer_raw.get("privacy_process_names"),
+            default=list(DEFAULT_PRIVACY_PROCESS_NAMES),
+            field_name="observer.privacy_process_names",
+        )),
     )
     runtime = RuntimeConfig(
         request_timeout_seconds=max(5.0, float(runtime_raw.get("request_timeout_seconds", 20.0))),
@@ -277,11 +293,11 @@ def _clean_required_text(value: str, field_name: str) -> str:
     return normalized
 
 
-def _string_list(value: Any, default: list[str]) -> list[str]:
+def _string_list(value: Any, default: list[str], field_name: str) -> list[str]:
     if value is None:
         return default
     if not isinstance(value, list):
-        raise ConfigError("observer.ide_keywords must be a list of strings")
+        raise ConfigError(f"{field_name} must be a list of strings")
     normalized = [item.strip() for item in value if isinstance(item, str) and item.strip()]
     return normalized or default
 

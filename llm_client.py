@@ -69,7 +69,7 @@ def generate_chat_reply(
 
 
 def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: str) -> ModelReply:
-    # 被动观察必须走视觉模型，因为它的输入就是当前窗口截图。
+    # 普通被动观察走视觉模型；隐私进程会在 observer_thread 中改走纯文本脱敏路径。
     client = _build_client(
         base_url=config.llm.base_url,
         api_key=config.llm.api_key,
@@ -108,6 +108,44 @@ def analyze_screenshot(config: AppConfig, screenshot_base64: str, window_title: 
                         },
                     },
                 ],
+            },
+        ],
+    )
+    raw_text = _extract_chat_text(response)
+    return parse_model_reply(raw_text, fallback_message="抱歉，我没读懂这次回复。")
+
+
+def analyze_redacted_observation(config: AppConfig, process_name: str) -> ModelReply:
+    # 隐私进程只走文本模型，输入里不包含截图、窗口标题、联系人名或聊天内容。
+    safe_process_name = process_name.strip() or "受保护进程"
+    client = _build_client(
+        base_url=config.llm.base_url,
+        api_key=config.llm.api_key,
+        timeout_seconds=config.runtime.request_timeout_seconds,
+    )
+    response = client.chat.completions.create(
+        model=config.llm.chat_model_name,
+        temperature=0.6,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "你是 CodingPet，一个安静观察前台窗口的桌面编程伙伴。"
+                    f"请始终保持人设：{config.pet_preset.personality_prompt}。"
+                    "当前窗口命中隐私保护名单，本轮没有截图、窗口标题、联系人名或聊天内容。"
+                    "只能根据进程名做一句很轻的主动评论，不要猜测用户正在和谁聊天或聊天内容。"
+                    "请严格只输出一行，格式必须是：[STATE] 一句简短吐槽或建议。"
+                    f"只允许使用这些状态：{STATE_NAMES}。"
+                    "不要输出 JSON、Markdown 或额外说明。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "隐私脱敏后的当前前台窗口信息只有这一项："
+                    f"进程名：{safe_process_name}。"
+                    "请基于这个进程名说一句简短主动评论。"
+                ),
             },
         ],
     )
