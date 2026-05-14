@@ -32,6 +32,7 @@ class CodingPetController(QObject):
         self._chat_history: list[ChatTurn] = []
         self._interaction_busy = False
         self._manual_override_active = False
+        self._random_mood_active = False
         self._observer_restart_after_stop = False
         self._observer_stopping = False
 
@@ -54,6 +55,10 @@ class CodingPetController(QObject):
         self._random_mood_timer.setSingleShot(True)
         self._random_mood_timer.timeout.connect(self._switch_random_mood)
 
+        self._initial_observer_timer = QTimer(self)
+        self._initial_observer_timer.setSingleShot(True)
+        self._initial_observer_timer.timeout.connect(self._sync_observer_worker)
+
     def start(self) -> None:
         # 启动时先把窗口和基础状态亮出来，再接入观察线程。
         self.window.show()
@@ -63,7 +68,7 @@ class CodingPetController(QObject):
         self._logger.info("阶段 1 成功：透明宠物窗口已就绪。")
         self._logger.info("阶段 2 成功：交互聊天链路已接好。")
 
-        self._sync_observer_worker()
+        self._schedule_initial_observer_start()
 
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
@@ -84,6 +89,7 @@ class CodingPetController(QObject):
 
         self._random_mood_timer.stop()
         self._state_reset_timer.stop()
+        self._initial_observer_timer.stop()
         close_cached_clients()
 
     def _start_chat(self, text: str) -> bool:
@@ -109,6 +115,7 @@ class CodingPetController(QObject):
         self.window.show_message("我想一下...", 1600)
         self._interaction_busy = True
         self._manual_override_active = False
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self._refresh_observer_observation_gate()
 
@@ -152,7 +159,24 @@ class CodingPetController(QObject):
         self.window.update_config(config)
         self._trim_chat_history()
         self._refresh_context_dialog()
+        self._initial_observer_timer.stop()
         self._sync_observer_worker(force_restart=True)
+
+    def _schedule_initial_observer_start(self) -> None:
+        if not self._config.observer.global_observation_enabled:
+            self._sync_observer_worker()
+            return
+
+        self._initial_observer_timer.start(self._initial_observer_start_delay_ms())
+
+    def _initial_observer_start_delay_ms(self) -> int:
+        return max(
+            self._config.runtime.message_duration_ms,
+            min(
+                self._config.observer.interval_seconds * 1000,
+                self._config.runtime.random_mood_min_seconds * 1000,
+            ),
+        )
 
     def _sync_observer_worker(self, force_restart: bool = False) -> None:
         # 观察线程是否启用完全由配置控制。
@@ -318,17 +342,20 @@ class CodingPetController(QObject):
         self._interaction_busy = True
         if clear_manual_override:
             self._manual_override_active = False
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self._refresh_observer_observation_gate()
         self.window.set_state(state)
-        self.window.show_message(message)
-        self._state_reset_timer.start(self._config.runtime.state_reset_ms)
+        display_ms = self._config.runtime.message_duration_ms
+        self.window.show_message(message, display_ms)
+        self._state_reset_timer.start(max(self._config.runtime.state_reset_ms, display_ms))
 
     def _handle_observation_started(self, worker: ObserverWorker) -> None:
         # 只有在当前不忙、也没有手动拖拽/缩放时，才切到观察态。
         if not self._is_active_observer_worker(worker) or not self._observer_can_run_cycle():
             self._refresh_observer_observation_gate()
             return
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self.window.set_state(PetState.REVIEWING)
 
@@ -339,6 +366,7 @@ class CodingPetController(QObject):
         if self._interaction_busy or self._manual_override_active:
             self._refresh_observer_observation_gate()
             return
+        self._random_mood_active = False
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
             self._schedule_random_mood()
@@ -348,6 +376,7 @@ class CodingPetController(QObject):
         if self._context_dialog is not None:
             self._context_dialog.set_sending(False)
             self._context_dialog.set_status("发送失败，稍后再试吧。")
+        self._random_mood_active = False
         self.window.set_state(PetState.IDLE)
         self.window.show_message(message)
         self._finish_interaction_state()
@@ -356,6 +385,7 @@ class CodingPetController(QObject):
         # 一次回复展示完以后，交互态不应该一直占着。
         self._interaction_busy = False
         self._manual_override_active = False
+        self._random_mood_active = False
         self._refresh_observer_observation_gate()
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:
@@ -368,13 +398,34 @@ class CodingPetController(QObject):
             or self._manual_override_active
             or (self._chat_worker is not None and self._chat_worker.isRunning())
         ):
+            self._random_mood_active = False
             self._schedule_random_mood()
             return
 
-        self.window.set_state(random.choice(RANDOM_MOOD_STATES))
-        self._schedule_random_mood()
+        if self._random_mood_active:
+            self._random_mood_active = False
+            self.window.set_state(PetState.IDLE)
+            self._schedule_random_mood()
+            return
+
+        mood_choices = [
+            state
+            for state in RANDOM_MOOD_STATES
+            if state is not PetState.IDLE and state != self.window.current_state
+        ]
+        if not mood_choices:
+            self._schedule_random_mood()
+            return
+
+        self._random_mood_active = True
+        self.window.set_state(random.choice(mood_choices))
+        self._random_mood_timer.start(self._random_mood_hold_ms())
+
+    def _random_mood_hold_ms(self) -> int:
+        return max(3000, min(5500, self._config.runtime.message_duration_ms - 1500))
 
     def _schedule_random_mood(self) -> None:
+        self._random_mood_active = False
         # 随机时间间隔由配置决定，避免心情切换过于机械。
         min_ms = self._config.runtime.random_mood_min_seconds * 1000
         max_ms = self._config.runtime.random_mood_max_seconds * 1000
@@ -385,6 +436,7 @@ class CodingPetController(QObject):
         if self._interaction_busy:
             return
         self._manual_override_active = True
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self._refresh_observer_observation_gate()
         self.window.set_state(PetState.LISTENING)
@@ -438,6 +490,7 @@ class CodingPetController(QObject):
         if self._interaction_busy:
             return
         self._manual_override_active = True
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self._refresh_observer_observation_gate()
         self.window.set_state(PetState.DRAGGING)
@@ -450,6 +503,7 @@ class CodingPetController(QObject):
         if self._interaction_busy:
             return
         self._manual_override_active = True
+        self._random_mood_active = False
         self._random_mood_timer.stop()
         self._refresh_observer_observation_gate()
         self.window.set_state(PetState.RESIZING)
@@ -462,6 +516,7 @@ class CodingPetController(QObject):
         if self._interaction_busy:
             return
         self._manual_override_active = False
+        self._random_mood_active = False
         self._refresh_observer_observation_gate()
         self.window.set_state(PetState.IDLE)
         if self._config.runtime.random_mood_enabled:

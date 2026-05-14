@@ -42,12 +42,12 @@ runtime:
   # 气泡消息默认显示时长，单位为毫秒。
   message_duration_ms: 7000
   # 模型回复后宠物状态保持多久再回到 idle，单位为毫秒。
-  state_reset_ms: 6000
+  state_reset_ms: 7000
   # 空闲时是否启用随机心情切换。
   random_mood_enabled: true
   # 随机心情切换的最短/最长等待时间，单位为秒。
-  random_mood_min_seconds: 8
-  random_mood_max_seconds: 20
+  random_mood_min_seconds: 25
+  random_mood_max_seconds: 60
   # 桌宠默认尺寸和用户可缩放尺寸边界，单位为像素。
   sprite_size: 300
   sprite_min_size: 160

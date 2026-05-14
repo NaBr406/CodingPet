@@ -409,6 +409,7 @@ class PetWindow(QWidget):
         self._frame_cache: dict[PetState, list[QPixmap]] = {}
         self._animation_frames: list[QPixmap] = []
         self._animation_index = 0
+        self._current_state: PetState | None = None
         self._animation_timer = QTimer(self)
         self._animation_timer.timeout.connect(self._advance_animation_frame)
 
@@ -454,6 +455,10 @@ class PetWindow(QWidget):
     def set_state(self, state: PetState | str) -> None:
         # 状态切换时先加载对应资源，再决定是否开启帧动画。
         normalized = state if isinstance(state, PetState) else PetState.from_emotion(state)
+        if normalized == self._current_state and self._animation_frames:
+            return
+
+        self._current_state = normalized
         self._animation_frames = self._load_state_frames(normalized)
         if not self._animation_frames:
             self._animation_frames = [self._build_placeholder_pixmap()]
@@ -465,6 +470,10 @@ class PetWindow(QWidget):
             self._animation_timer.start(STATE_ANIMATION_FRAME_MS.get(normalized, 120))
         else:
             self._animation_timer.stop()
+
+    @property
+    def current_state(self) -> PetState | None:
+        return self._current_state
 
     def show_message(self, text: str, duration_ms: int | None = None) -> None:
         self._bubble.set_anchor_rect(self.frameGeometry())
