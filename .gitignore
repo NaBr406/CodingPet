@@ -1,6 +1,9 @@
 # Local configuration
 config.yaml
 
+# IDE metadata
+.idea/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -17,3 +20,8 @@ dist/
 
 # Local asset preparation output
 assets/live2d-prep/
+assets/upscale-input/
+assets/image-redraw-tests/
+assets/*.webp
+assets/*.webp.png
+assets/*/frame_*.webp
