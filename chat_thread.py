@@ -5,7 +5,6 @@ import io
 import logging
 from typing import Sequence
 
-from mss import mss
 from PIL import Image
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -13,6 +12,11 @@ from config_loader import AppConfig
 from conversation_history import ChatTurn
 from llm_client import generate_chat_reply
 from logging_utils import LOGGER_NAME
+
+try:
+    from mss import mss
+except Exception:
+    mss = None
 
 
 class ChatWorker(QThread):
@@ -54,6 +58,10 @@ class ChatWorker(QThread):
 
     def _capture_screen(self) -> str | None:
         logger = logging.getLogger(LOGGER_NAME)
+        if mss is None:
+            logger.warning("主动聊天截图依赖 mss 不可用，已改为纯文本发送。")
+            return None
+
         try:
             # 主动聊天截的是主屏幕，目的不是做全局录屏，而是把当前上下文
             # 交给模型，减少用户重复描述屏幕内容。

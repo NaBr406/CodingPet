@@ -4,16 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-All commands assume the repo-local venv at `.venv/`. On Windows use `.\.venv\Scripts\python.exe`; in bash (Git Bash / MSYS) use `./.venv/Scripts/python.exe`.
+Windows commands assume the repo-local venv at `.venv/`. On Linux use a native venv such as `.venv-linux/`; do not reuse a Windows `.venv/Scripts/python.exe`.
 
-- Install deps: `./.venv/Scripts/python.exe -m pip install -r requirements.txt`
-- Run the app: `./.venv/Scripts/python.exe main.py`
-- Preview only the pet window (no controller/threads): `./.venv/Scripts/python.exe ui_core.py`
-- Syntax check (no test suite exists): `./.venv/Scripts/python.exe -m py_compile main.py ui_core.py chat_thread.py observer_thread.py llm_client.py config_loader.py pet_state.py logging_utils.py`
-- Validate animation frames (24+ frames/state, transparency, drift): `./.venv/Scripts/python.exe tools/validate_pet_frames.py`
-- Rebuild animation frames from `assets/source/*_source.png`: `./.venv/Scripts/python.exe tools/rebuild_pet_actions.py` (add `--clarity 0` to disable sharpening, `--with-webp-frames` to also emit WebP)
-- Generate preview sheet: `./.venv/Scripts/python.exe tools/preview_pet_frames.py`
-- Build Windows `.exe`: `./.venv/Scripts/python.exe tools/build_exe.py` (wraps PyInstaller; output to `dist/CodingPet.exe`)
+- Install deps on Windows: `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+- Install deps on Linux: `./.venv-linux/bin/python -m pip install -r requirements.txt`
+- Run the app on Windows: `.\.venv\Scripts\python.exe main.py`
+- Run the app on Linux: `./.venv-linux/bin/python main.py`
+- Preview only the pet window (no controller/threads): `./.venv-linux/bin/python ui_core.py` or `.\.venv\Scripts\python.exe ui_core.py`
+- Syntax check (no test suite exists): `python3 -m py_compile main.py ui_core.py chat_thread.py observer_thread.py llm_client.py config_loader.py pet_state.py logging_utils.py`
+- Validate animation frames (24+ frames/state, transparency, drift): `./.venv-linux/bin/python tools/validate_pet_frames.py` or `.\.venv\Scripts\python.exe tools\validate_pet_frames.py`
+- Rebuild animation frames from `assets/source/*_source.png`: `./.venv-linux/bin/python tools/rebuild_pet_actions.py` (add `--clarity 0` to disable sharpening, `--with-webp-frames` to also emit WebP)
+- Generate preview sheet: `./.venv-linux/bin/python tools/preview_pet_frames.py`
+- Build Windows `.exe`: `.\.venv\Scripts\python.exe tools\build_exe.py` (wraps PyInstaller; output to `dist/CodingPet.exe`)
 
 There is no linter, formatter, or test runner configured. `codingpet.log` is written alongside the working directory during source runs, and under `%APPDATA%\CodingPet\` when frozen.
 
@@ -27,7 +29,7 @@ CodingPet is a PyQt6 desktop pet that talks to an OpenAI-compatible Chat Complet
 
 [chat_thread.py](chat_thread.py) — `ChatWorker` is a `QThread` that captures a screenshot (only if `observer.global_observation_enabled` is true — the same flag gates both active-chat screenshots and the passive observer), calls `generate_chat_reply`, and emits `response_ready(user_text, message, emotion)` or `request_failed`.
 
-[observer_thread.py](observer_thread.py) — `ObserverWorker` checks the foreground process first. If it matches `observer.privacy_process_names`, it does not capture a screenshot or send the window title; it calls `analyze_redacted_observation` with only the process name. Otherwise it polls the foreground window via `pygetwindow`, grabs just that window's region (falls back to full screen if geometry is missing), and calls `analyze_screenshot`. It uses a flag-based cooperative stop (`stop()` + chunked `msleep`) — do not replace with `terminate()`; in-flight HTTP requests must be allowed to return.
+[observer_thread.py](observer_thread.py) — `ObserverWorker` checks the foreground process first. If it matches `observer.privacy_process_names`, it does not capture a screenshot or send the window title; it calls `analyze_redacted_observation` with only the process name. On Windows it polls the foreground window via `pygetwindow`/Win32 APIs. On Linux X11 it tries `xdotool`; if that is unavailable or the desktop blocks window inspection, it falls back to a full-screen capture with an unknown title. It uses a flag-based cooperative stop (`stop()` + chunked `msleep`) — do not replace with `terminate()`; in-flight HTTP requests must be allowed to return.
 
 [llm_client.py](llm_client.py) — Model selection hinges on whether a screenshot is attached: `vision_model_name` if yes, `chat_model_name` if no. `generate_chat_reply` auto-downgrades to text-only on `BadRequestError`/`NotFoundError` matching vision-unsupported keywords; `analyze_screenshot` does not. Privacy-redacted passive observations use `analyze_redacted_observation` and `chat_model_name` because they send only a process name. Multi-turn history is only sent when `chat.multi_turn_enabled` is true, truncated to the last `chat.memory_turns` turns.
 

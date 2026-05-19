@@ -4,12 +4,15 @@ import base64
 import ctypes
 import io
 import logging
+import os
+import shutil
+import subprocess
+import sys
 from ctypes import wintypes
-from pathlib import PureWindowsPath
+from dataclasses import dataclass
+from pathlib import Path, PureWindowsPath
 from threading import Event
 
-import pygetwindow as gw
-from mss import mss
 from PIL import Image
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -20,6 +23,26 @@ from logging_utils import LOGGER_NAME
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 PROCESS_NAME_BUFFER_SIZE = 32768
+
+try:
+    import pygetwindow as gw
+except Exception:
+    gw = None
+
+try:
+    from mss import mss
+except Exception:
+    mss = None
+
+
+@dataclass(frozen=True)
+class ActiveWindowInfo:
+    title: str = ""
+    process_name: str = ""
+    left: int = 0
+    top: int = 0
+    width: int = 0
+    height: int = 0
 
 
 class ObserverWorker(QThread):
@@ -55,24 +78,29 @@ class ObserverWorker(QThread):
         logger = logging.getLogger(LOGGER_NAME)
         logger.info("阶段 3 成功：观察线程已就绪。")
 
-        with mss() as screen_capture:
-            while not self._stop_requested.is_set():
-                if not self._observation_allowed.is_set():
-                    logger.info("观察线程跳过本轮：当前用户交互或请求正忙。")
-                    self._sleep_interruptibly(self._interval_ms)
-                    continue
+        try:
+            with mss() as screen_capture:
+                while not self._stop_requested.is_set():
+                    if not self._observation_allowed.is_set():
+                        logger.info("观察线程跳过本轮：当前用户交互或请求正忙。")
+                        self._sleep_interruptibly(self._interval_ms)
+                        continue
 
-                try:
-                    # 每轮先观测一次，再进入等待；这样启动后不会白白空转一个间隔。
-                    self._observe_once(screen_capture)
-                except Exception:
-                    logger.warning("观察循环失败，已回退到 IDLE。", exc_info=True)
-                    self.observation_failed.emit(self)
-                self._sleep_interruptibly(self._interval_ms)
+                    try:
+                        # 每轮先观测一次，再进入等待；这样启动后不会白白空转一个间隔。
+                        self._observe_once(screen_capture)
+                    except Exception:
+                        logger.warning("观察循环失败，已回退到 IDLE。", exc_info=True)
+                        self.observation_failed.emit(self)
+                    self._sleep_interruptibly(self._interval_ms)
+        except Exception:
+            logger.warning("观察线程初始化截图环境失败，已停用本轮观察。", exc_info=True)
+            self.observation_failed.emit(self)
 
     def _observe_once(self, screen_capture: mss) -> None:
         logger = logging.getLogger(LOGGER_NAME)
-        process_name = _get_foreground_process_name()
+        active_window = _get_active_window_info()
+        process_name = active_window.process_name
 
         if _is_privacy_process(process_name, self._config.observer.privacy_process_names):
             if self._stop_requested.is_set() or not self._observation_allowed.is_set():
@@ -92,15 +120,7 @@ class ObserverWorker(QThread):
             self.observation_ready.emit(self, process_name, reply.message, reply.emotion.value)
             return
 
-        active_window = gw.getActiveWindow()
-        title = ""
-        if active_window is not None:
-            title = str(getattr(active_window, "title", "") or "")
-        if not title:
-            title = str(gw.getActiveWindowTitle() or "")
-
-        if not title:
-            title = "未识别前台窗口"
+        title = active_window.title or "未识别前台窗口"
 
         if self._stop_requested.is_set() or not self._observation_allowed.is_set():
             return
@@ -159,6 +179,107 @@ class ObserverWorker(QThread):
             chunk = min(500, remaining)
             self.msleep(chunk)
             remaining -= chunk
+
+
+def _get_active_window_info() -> ActiveWindowInfo:
+    if sys.platform.startswith("linux"):
+        linux_window = _get_linux_active_window_info()
+        if linux_window.title or linux_window.process_name:
+            return linux_window
+
+    return _get_pygetwindow_active_window_info()
+
+
+def _get_pygetwindow_active_window_info() -> ActiveWindowInfo:
+    process_name = _get_foreground_process_name()
+    if gw is None:
+        return ActiveWindowInfo(process_name=process_name)
+
+    try:
+        active_window = gw.getActiveWindow()
+        title = ""
+        if active_window is not None:
+            title = str(getattr(active_window, "title", "") or "")
+        if not title:
+            title = str(gw.getActiveWindowTitle() or "")
+
+        return ActiveWindowInfo(
+            title=title,
+            process_name=process_name,
+            left=int(getattr(active_window, "left", 0) or 0),
+            top=int(getattr(active_window, "top", 0) or 0),
+            width=int(getattr(active_window, "width", 0) or 0),
+            height=int(getattr(active_window, "height", 0) or 0),
+        )
+    except Exception:
+        logging.getLogger(LOGGER_NAME).debug("读取前台窗口信息失败。", exc_info=True)
+        return ActiveWindowInfo(process_name=process_name)
+
+
+def _get_linux_active_window_info() -> ActiveWindowInfo:
+    if not os.environ.get("DISPLAY") or shutil.which("xdotool") is None:
+        return ActiveWindowInfo()
+
+    window_id = _run_command_text(["xdotool", "getactivewindow"])
+    if not window_id:
+        return ActiveWindowInfo()
+
+    title = _run_command_text(["xdotool", "getwindowname", window_id])
+    process_name = _linux_process_name(_run_command_text(["xdotool", "getwindowpid", window_id]))
+    geometry = _parse_xdotool_geometry(
+        _run_command_text(["xdotool", "getwindowgeometry", "--shell", window_id])
+    )
+
+    return ActiveWindowInfo(
+        title=title,
+        process_name=process_name,
+        left=geometry.get("X", 0),
+        top=geometry.get("Y", 0),
+        width=geometry.get("WIDTH", 0),
+        height=geometry.get("HEIGHT", 0),
+    )
+
+
+def _run_command_text(command: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _linux_process_name(pid_text: str) -> str:
+    try:
+        pid = int(pid_text.strip())
+    except ValueError:
+        return ""
+
+    comm_path = Path("/proc") / str(pid) / "comm"
+    try:
+        return comm_path.read_text(encoding="utf-8").splitlines()[0].strip()
+    except (OSError, IndexError):
+        return ""
+
+
+def _parse_xdotool_geometry(output: str) -> dict[str, int]:
+    geometry: dict[str, int] = {}
+    for line in output.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key in {"X", "Y", "WIDTH", "HEIGHT"}:
+            try:
+                geometry[key] = int(value)
+            except ValueError:
+                continue
+    return geometry
 
 
 def _get_foreground_process_name() -> str:

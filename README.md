@@ -16,9 +16,10 @@ CodingPet 是一个悬浮在桌面上的编程伙伴。它使用 PyQt6 渲染透
 
 ## 环境要求
 
-- Windows 桌面环境推荐。项目使用了 `mss` 截图、`pygetwindow` 活动窗口检测，并在 Windows 上额外处理透明窗口边框。
+- Windows 桌面环境体验最完整；Linux X11 可运行基础桌宠和聊天功能，后台观察会尽力读取前台窗口，拿不到窗口信息时退回整屏截图。Wayland 下截图和前台窗口识别可能受桌面环境权限限制。
 - Python 3.10+。
 - 一个 OpenAI 兼容的接口地址，且至少需要文本聊天模型；如果要启用截图理解和观察能力，还需要支持图像输入的视觉模型。
+- Linux 上建议安装 `python3-venv` / `python3-pip`。Ubuntu 24.04 等发行版运行 PyQt6 还需要 `libxcb-cursor0`；如果要让后台观察识别 X11 前台窗口，可额外安装 `xdotool`。
 
 依赖记录在 `requirements.txt`：
 
@@ -33,12 +34,32 @@ PyYAML
 
 ## 快速开始
 
-在项目根目录执行：
+Windows 在项目根目录执行：
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Linux 在项目根目录执行：
+
+```bash
+python3 -m venv .venv-linux
+./.venv-linux/bin/python -m pip install --upgrade pip
+./.venv-linux/bin/python -m pip install -r requirements.txt
+```
+
+如果 `python3 -m venv` 提示缺少 `ensurepip`，Debian/Ubuntu 系发行版需要先安装系统包：
+
+```bash
+sudo apt install python3-venv python3-pip libxcb-cursor0
+```
+
+如果要启用 Linux X11 前台窗口识别：
+
+```bash
+sudo apt install xdotool
 ```
 
 创建本地配置文件 `config.yaml`。这个文件已被 `.gitignore` 忽略，适合放本机 API Key。
@@ -82,6 +103,12 @@ runtime:
 
 ```powershell
 .\.venv\Scripts\python.exe main.py
+```
+
+Linux：
+
+```bash
+./.venv-linux/bin/python main.py
 ```
 
 ## 使用方式
@@ -186,16 +213,34 @@ runtime:
 .\.venv\Scripts\python.exe -m py_compile main.py ui_core.py chat_thread.py observer_thread.py llm_client.py config_loader.py pet_state.py logging_utils.py
 ```
 
+Linux：
+
+```bash
+./.venv-linux/bin/python -m py_compile main.py ui_core.py chat_thread.py observer_thread.py llm_client.py config_loader.py pet_state.py logging_utils.py
+```
+
 素材检查：
 
 ```powershell
 .\.venv\Scripts\python.exe tools\validate_pet_frames.py
 ```
 
+Linux：
+
+```bash
+./.venv-linux/bin/python tools/validate_pet_frames.py
+```
+
 只预览透明宠物窗口，不启动完整控制器：
 
 ```powershell
 .\.venv\Scripts\python.exe ui_core.py
+```
+
+Linux：
+
+```bash
+./.venv-linux/bin/python ui_core.py
 ```
 
 ## 日志和排障
